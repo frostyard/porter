@@ -83,5 +83,5 @@ with attendees does.
 ## References
 
 - Shapes: [design/overview.md](../design/overview.md), [specs/routines.md](../specs/routines.md)
-- Related: frostmail [ADR-0042](https://github.com/frostyard/frostmail/blob/main/docs/adr/0042-agents-get-calendar-task-and-contact-tools-without-event-writes.md) (no event writes for agents, since an invitation is a send)
+- Related: frostmail [ADR-0042](https://github.com/frostyard/frostmail/blob/main/docs/adr/0042-agents-get-calendar-task-and-contact-tools.md) (no event writes for agents, since an invitation is a send)
 - Builds on: [ADR-0003](0003-porter-is-a-lodge-app-that-owns-no-data.md), lodge [ADR-0006](https://github.com/frostyard/lodge/blob/main/docs/adr/0006-agents-reach-each-app-through-its-own-mcp-endpoint.md)
