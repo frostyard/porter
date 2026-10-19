@@ -9,7 +9,7 @@ Status (2026-10-19):
 - Phase 0 is done.
 - The founding documents (ADRs 0003 to 0006, the design doc and
   [specs/routines.md](../specs/routines.md)) are Proposed.
-- Phase 1's docs are in review in lodge, frostnotes and frostmail.
+- Phase 1 is built and checked on lodge's host (2026-10-19).
 
 ## Phase 0 — The scaffold (done)
 
@@ -18,7 +18,7 @@ Status (2026-10-19):
 - **Done when:** `make check` passes, kittest's socket rules included.
   Done 2026-10-19.
 
-## Phase 1 — What Porter needs from the others (in their repositories)
+## Phase 1 — What Porter needs from the others (done 2026-10-19, in their repositories)
 
 - **lodge:**
   - the companion, with its layout, rail button, toggle shortcut, the
@@ -39,6 +39,21 @@ Status (2026-10-19):
   socket with a notes token scoped as Porter's appends to today's daily
   note, is refused writing `Porter/Routines/`, and lists today's events
   through mail's MCP.
+- **Done (2026-10-19), on lodge's own host rather than the development
+  build.** lodge bab1ed7, notes dd604aa and mail 424e2a7, on the test vault
+  and showcase mail.
+  - The agent ran as user `frostporter` on `/run/lodge/agent.sock`, with
+    notes `vault=1;write=Porter/;except=Porter/Routines/;daily` and mail
+    `account=*;write` tokens.
+  - It appended to today's daily note (`/notes/1/2026-10-19.md`) and wrote
+    `Porter/Phase 1 check.md`.
+  - Writing `Porter/Routines/Planted.md`, or a note outside `Porter/`,
+    answered invalidParams naming the writable folders.
+  - It listed the day's three events with their clash, nine tasks, and
+    "waiting on you" with a Message-ID and a `/mail/message/…` link. Mail
+    offered no send tool.
+  - The same mail token over the tailnet route answered 401, and a user
+    not in `lodge-agents` could not open the socket.
 
 ## Phase 2 — Chat in the companion (interactive only)
 
