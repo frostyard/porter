@@ -141,7 +141,7 @@ The web bundle, on `@frostyard/lodge-client`:
 | App | Token scope | Used for |
 | --- | --- | --- |
 | notes | `vault=<id>;write=Porter/;except=Porter/Routines/;daily` | reading the vault, memory, briefs and reviews, routines (read-only), capture |
-| mail | `account=*;write` (never `;send`) | mail, drafts, flags and moves; calendar, tasks and contacts ([frostmail plan 0012](https://github.com/frostyard/frostmail/blob/main/docs/plans/0012-calendar-tasks-and-contacts-for-agents.md)) |
+| mail | `account=*;write` (never `;send`) | mail, drafts, flags and moves; calendar, tasks and contacts ([frostmail plan 0012](https://github.com/frostyard/frostmail/blob/main/docs/plans/0012-calendar-tasks-and-contacts-for-agents.md); no event writes, [ADR-0042](https://github.com/frostyard/frostmail/blob/main/docs/adr/0042-agents-get-calendar-task-and-contact-tools-without-event-writes.md)) |
 | the GitHub manager | read, plus drafts; no posting | later |
 
 ## Operational notes
