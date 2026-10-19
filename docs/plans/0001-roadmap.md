@@ -30,7 +30,7 @@ Status (2026-10-19):
   - folder-limited write scopes, the `daily` append right, and
     `append_to_daily_note`
     ([frostnotes ADR-0028](https://github.com/frostyard/frostnotes/blob/main/docs/adr/0028-an-agents-scope-can-limit-writes-to-folders.md),
-    [plan 0007](https://github.com/frostyard/frostnotes/blob/main/docs/plans/0007-folder-limited-agent-scopes.md)).
+    [plan 0007](https://github.com/frostyard/frostnotes/blob/main/docs/plans/0007-folder-scopes-for-agents.md)).
 - **mail:**
   - calendar, task and contact tools;
   - the "awaiting reply" queries
