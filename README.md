@@ -1,5 +1,13 @@
 # Porter
 
+The owner's personal assistant inside
+[lodge](https://github.com/frostyard/lodge). You talk to it in a chat panel
+beside whatever app you are in. It reads your mail, calendar, tasks and
+notes through their MCP endpoints, drafts but never sends, keeps its memory
+and its scheduled prompts (routines) as notes in your vault, and thinks
+through lodge's inference layer. Pre-release: the design is in
+[docs/](docs/README.md), and the code is lodge's app scaffold so far.
+
 lodge's `porter` app: the `porterd` daemon, on the app socket lodge
 reaches it through, and its web bundle, which lodge serves at
 `/app/porter/`. It follows lodge's
