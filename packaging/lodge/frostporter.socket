@@ -1,0 +1,16 @@
+# Porter's lodge socket (lodge's app-contract.md, Install layout). systemd
+# creates it, owned by frostporter and group lodge, 0660, and passes it to
+# porterd, which the kit's lodgeapp.Env.Listen accepts.
+[Unit]
+Description=Porter's lodge socket
+
+[Socket]
+ListenStream=/run/lodge/apps/porter.sock
+FileDescriptorName=porter
+SocketUser=frostporter
+SocketGroup=lodge
+SocketMode=0660
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target
