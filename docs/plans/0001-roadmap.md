@@ -28,9 +28,9 @@ Status (2026-10-19):
     ([lodge ADR-0014](https://github.com/frostyard/lodge/blob/main/docs/adr/0014-agents-on-lodges-host-use-a-local-agent-socket.md)).
 - **notes:**
   - folder-limited write scopes, the `daily` append right, and
-    `append_daily`
+    `append_to_daily_note`
     ([frostnotes ADR-0028](https://github.com/frostyard/frostnotes/blob/main/docs/adr/0028-an-agents-scope-can-limit-writes-to-folders.md),
-    [plan 0007](https://github.com/frostyard/frostnotes/blob/main/docs/plans/0007-folder-scopes-for-agents.md)).
+    [plan 0007](https://github.com/frostyard/frostnotes/blob/main/docs/plans/0007-folder-limited-agent-scopes.md)).
 - **mail:**
   - calendar, task and contact tools;
   - the "awaiting reply" queries
@@ -90,7 +90,7 @@ Status (2026-10-19):
 ## Open questions
 
 - **The owner's daily-note settings:** Porter finds today's note through
-  notes. Confirm that notes' `append_daily` resolves the folder and
+  notes. Confirm that notes' `append_to_daily_note` resolves the folder and
   template. By Phase 1.
 - **Recent turns:** how many fit in a prompt (about 24k tokens) and stay
   quick on the local model. Measure in Phase 2.
