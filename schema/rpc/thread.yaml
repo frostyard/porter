@@ -1,0 +1,122 @@
+# The thread domain: Porter's one continuous conversation (ADR-0006), as
+# its web bundle reads and writes it. api/thread.go is what a generator
+# writes from this file, by hand until the app adopts one.
+domain: thread
+protocol: 1
+callers: [local, session]
+doc: >-
+  The owner's thread with Porter. The owner sends a message with its
+  context; Porter's reply arrives as events on a subscribed connection,
+  growing as it works, and is stored as a turn like every other.
+enums:
+  - name: TurnRole
+    doc: Who a turn is from.
+    values:
+      - {name: owner, doc: "The owner's message."}
+      - {name: porter, doc: "Porter's reply: its text and the cards of what it did."}
+      - {name: notice, doc: "A single line from Porter outside a reply, such as a capture made or a routine's output."}
+  - name: CardKind
+    doc: What a card in a turn shows.
+    values:
+      - {name: tool, doc: "A tool Porter called: its app, its tool, a one-line summary, and a link."}
+      - {name: capture, doc: "Text Porter proposes to append to today's daily note, waiting for the owner's confirmation."}
+  - name: CardStatus
+    doc: Where a card stands.
+    values:
+      - {name: done, doc: "The tool ran, or the capture was appended."}
+      - {name: failed, doc: "The tool, or the append, failed; detail says why."}
+      - {name: pending, doc: "A capture waiting for the owner."}
+      - {name: cancelled, doc: "A capture the owner cancelled."}
+types:
+  - name: Context
+    doc: What the current app reported as on screen (lodge-client's context), as a chip in the thread.
+    fields:
+      - {name: app, type: string, doc: "The reporting app's id, such as notes."}
+      - {name: kind, type: string, doc: "The app's kind of thing, such as note or message; empty when nothing is open."}
+      - {name: ref, type: string, doc: "The app's reference to it, at most 1,024 characters."}
+      - {name: title, type: string, doc: "Its title, at most 200 characters."}
+  - name: Card
+    doc: One thing Porter did, or proposes, within a reply.
+    fields:
+      - {name: id, type: string, doc: "The card's id, unique in the thread."}
+      - {name: kind, type: CardKind, doc: "What the card shows."}
+      - {name: status, type: CardStatus, doc: "Where it stands."}
+      - {name: app, type: string, doc: "The app the tool belongs to, such as notes or mail; porter for Porter's own."}
+      - {name: tool, type: string, doc: "The tool's name, such as read_note."}
+      - {name: summary, type: string, doc: "One line saying what it did or proposes."}
+      - {name: url, type: string, optional: true, doc: "A lodge address for what it touched, opened with lodge.open."}
+      - {name: text, type: string, optional: true, doc: "For a capture, the text to append."}
+      - {name: detail, type: string, optional: true, doc: "Why it failed."}
+  - name: Turn
+    doc: One turn of the thread.
+    fields:
+      - {name: id, type: int, doc: "The turn's id, increasing through the thread."}
+      - {name: at, type: string, doc: "When it was written, RFC 3339 in UTC."}
+      - {name: role, type: TurnRole, doc: "Who it is from."}
+      - {name: text, type: string, doc: "Markdown. Porter's links are lodge addresses or https URLs; the bundle never loads a remote resource."}
+      - {name: context, type: Context, optional: true, doc: "For an owner's turn, the context it was sent with."}
+      - {name: cards, type: "[]Card", doc: "For Porter's turn, what it did or proposes, in order."}
+      - {name: done, type: bool, doc: "Whether Porter's turn is complete; an owner's or a notice is always done."}
+  - name: TurnList
+    doc: A page of the thread, oldest first.
+    fields:
+      - {name: turns, type: "[]Turn", doc: "The turns, oldest first."}
+      - {name: more, type: bool, doc: "Whether older turns exist before the first."}
+  - name: Sent
+    doc: The owner's turn as stored, and the id Porter's reply will have.
+    fields:
+      - {name: turn, type: Turn, doc: "The owner's turn."}
+      - {name: reply, type: int, doc: "The id of Porter's reply, which events update until it is done."}
+  - name: Event
+    doc: >-
+      What a subscribed connection receives, as JSON-RPC notifications of
+      method "event": a turn written or updated, or whether Porter is
+      working.
+    fields:
+      - {name: type, type: string, doc: "turn, or working."}
+      - {name: turn, type: Turn, optional: true, doc: "For turn: the turn as it now stands. A turn with an id already shown replaces it."}
+      - {name: working, type: bool, optional: true, doc: "For working: whether Porter is working on a reply."}
+methods:
+  - name: list
+    doc: A page of the thread, the newest turns before `before`, oldest first.
+    params:
+      - {name: before, type: int, optional: true, doc: "Only turns with a smaller id; absent for the newest."}
+      - {name: limit, type: int, optional: true, doc: "At most this many, 1 to 200; default 50."}
+    result: TurnList
+    errors: [invalidParams]
+  - name: send
+    doc: >-
+      Add the owner's message and start Porter's reply. A reply already in
+      progress makes this conflict.
+    params:
+      - {name: text, type: string, doc: "The owner's message, 1 to 16,384 bytes."}
+      - {name: context, type: Context, optional: true, doc: "What the current app reported, if anything."}
+    result: Sent
+    errors: [invalidParams, conflict]
+  - name: search
+    doc: Turns whose text matches, newest first.
+    params:
+      - {name: query, type: string, doc: "Full-text terms."}
+      - {name: limit, type: int, optional: true, doc: "At most this many, 1 to 100; default 20."}
+    result: TurnList
+    errors: [invalidParams]
+  - name: confirm
+    doc: >-
+      Confirm a pending capture card: append its text, or the owner's edit
+      of it, to today's daily note. Answers the notice turn it writes.
+    params:
+      - {name: card, type: string, doc: "The capture card's id."}
+      - {name: text, type: string, optional: true, doc: "The text as the owner edited it; absent to append the card's text."}
+    result: Turn
+    errors: [notFound, conflict, unavailable]
+  - name: cancel
+    doc: Cancel a pending capture card.
+    params:
+      - {name: card, type: string, doc: "The capture card's id."}
+    errors: [notFound, conflict]
+  - name: subscribe
+    doc: >-
+      Deliver this connection's events from now on: turns written or
+      updated, and whether Porter is working. Answers whether a reply is in
+      progress.
+    result: bool
