@@ -138,9 +138,10 @@ func (s *Thread) Send(ctx context.Context, p *api.ThreadSendParams) (*api.Sent, 
 		s.idle()
 		return nil, err
 	}
+	// The owner's turn, then working, then the reply that grows.
 	s.emitTurn(owner)
-	s.emitTurn(reply)
 	s.emitWorking(true)
+	s.emitTurn(reply)
 	s.wg.Go(func() {
 		defer s.idle()
 		s.agent.Reply(s.base, owner, reply)
