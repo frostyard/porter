@@ -1,10 +1,13 @@
 // Porter's chat: the thread, its cards, and the input with its context
-// chip; in the full app, search as well (design/overview.md, The UI;
-// ADR-0006). It speaks to porterd only through a Transport, and to lodge
-// only through Shell, so tests drive it with fakes.
+// chip; in the full app, search and the Activity and Approvals tabs as well
+// (design/overview.md, The UI; ADR-0006). It speaks to porterd only through
+// a Transport, and to lodge only through Shell, so tests drive it with
+// fakes.
 
 import type { AppContext, Role } from "@frostyard/lodge-client";
+import { ActivityView } from "./activity";
 import {
+  activityAPI,
   type Card,
   Code,
   type Context,
@@ -15,6 +18,7 @@ import {
   type Turn,
   threadAPI,
 } from "./api";
+import { ApprovalsView } from "./approvals";
 import { type CardHost, renderCard, sameCard } from "./cards";
 import { el, icon, reconcile } from "./dom";
 import { type LinkOpener, markdownText, renderMarkdown } from "./markdown";
@@ -22,6 +26,7 @@ import {
   applyEvent,
   busy,
   emptyThread,
+  findCard,
   findTurn,
   newestPage,
   olderPage,
@@ -33,6 +38,7 @@ import {
   type ThreadState,
   upsert,
 } from "./thread";
+import { dayKey, dayLabel, localDate } from "./time";
 
 /** What the chat needs of lodge-client. */
 export interface Shell {
@@ -58,6 +64,15 @@ const PIN_SLACK = 40;
 /** How close to the top, in pixels, loads older turns. */
 const LOAD_SLACK = 300;
 
+/** The full app's tabs. */
+type Tab = "thread" | "activity" | "approvals";
+
+const TABS: readonly { tab: Tab; label: string }[] = [
+  { tab: "thread", label: "Thread" },
+  { tab: "activity", label: "Activity" },
+  { tab: "approvals", label: "Approvals" },
+];
+
 interface Env {
   links: LinkOpener;
   cards: CardHost;
@@ -78,28 +93,6 @@ function contextLine(className: string, c: Context): HTMLElement {
 
 function sameContext(a: Context | undefined, b: Context | undefined): boolean {
   return a?.app === b?.app && a?.kind === b?.kind && a?.ref === b?.ref && a?.title === b?.title;
-}
-
-function localDate(at: string): Date | null {
-  const d = new Date(at);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function dayKey(at: string): string {
-  const d = localDate(at);
-  return d === null ? "" : `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-}
-
-function dayLabel(at: string, now = new Date()): string {
-  const d = localDate(at);
-  if (d === null) return "";
-  const midnight = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const days = Math.round((midnight(now) - midnight(d)) / 86_400_000);
-  if (days === 0) return "Today";
-  if (days === 1) return "Yesterday";
-  const opts: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric" };
-  if (d.getFullYear() !== now.getFullYear()) opts.year = "numeric";
-  return d.toLocaleDateString(undefined, opts);
 }
 
 function workingDots(): HTMLElement {
@@ -133,7 +126,8 @@ class TurnView {
     if (turn.role === "owner") this.#setContext(turn.context);
     this.el.append(this.#body);
     this.#setText(turn.text);
-    if (turn.role === "porter") {
+    // Porter's replies and notices (a routine's run) carry cards; the owner's turns never do.
+    if (turn.role !== "owner") {
       this.#cards = el("div", "cards");
       this.el.append(this.#cards);
       this.#setCards(turn.cards);
@@ -181,6 +175,7 @@ class TurnView {
     this.#cardEls = next;
     reconcile(this.#cards, nodes);
     this.#cards.hidden = nodes.length === 0;
+    this.el.classList.toggle("with-cards", nodes.length > 0);
   }
 
   /** While Porter's turn is not done: working dots, or a note that it stopped. */
@@ -221,7 +216,12 @@ export class App {
   #note: { kind: NoteKind; text: string } | null = null;
   #searchSeq = 0;
   #searchTimer: ReturnType<typeof setTimeout> | undefined;
+  #tab: Tab = "thread";
+  #threadScroll = 0;
+  #activity: ActivityView | null = null;
+  #approvals: ApprovalsView | null = null;
 
+  #wrapEl: HTMLElement;
   #threadEl: HTMLElement;
   #listEl: HTMLElement;
   #topEl: HTMLElement;
@@ -233,7 +233,12 @@ export class App {
   #inputEl: HTMLTextAreaElement;
   #sendEl: HTMLButtonElement;
   #noteEl: HTMLElement;
+  #composerEl: HTMLElement;
   #resultsEl: HTMLElement | null = null;
+  #searchEl: HTMLInputElement | null = null;
+  #tabEls = new Map<Tab, HTMLButtonElement>();
+  #badgeEl: HTMLElement | null = null;
+  #barStatusEl: HTMLElement | null = null;
 
   constructor(o: AppOptions) {
     this.#shell = o.shell;
@@ -252,7 +257,12 @@ export class App {
     root.replaceChildren();
 
     const wrap = el("div", "thread-wrap");
-    if (o.shell.role === "app") root.append(this.#buildHeader(wrap));
+    this.#wrapEl = wrap;
+    if (o.shell.role === "app") {
+      this.#activity = new ActivityView(activityAPI(o.transport), this.#env.cards);
+      this.#approvals = new ApprovalsView(this.#api, this.#env.cards, () => this.#renderBadge());
+      root.append(this.#buildHeader(wrap));
+    }
 
     this.#threadEl = el("div", "thread");
     this.#topEl = el("div", "thread-top");
@@ -279,8 +289,13 @@ export class App {
     });
     wrap.append(this.#threadEl, this.#jumpEl);
     root.append(wrap);
+    if (this.#activity !== null && this.#approvals !== null) {
+      root.append(this.#panel(this.#activity.el, "activity"), this.#panel(this.#approvals.el, "approvals"));
+      this.#panel(wrap, "thread");
+    }
 
     const composer = el("form", "composer");
+    this.#composerEl = composer;
     composer.setAttribute("aria-label", "Message Porter");
     this.#statusEl = el("div", "status");
     this.#statusEl.setAttribute("role", "status");
@@ -317,6 +332,7 @@ export class App {
         if (this.#pinned) this.#scrollToBottom();
       }).observe(this.#threadEl);
     }
+    if (this.#activity !== null) this.#select("thread");
     this.#render();
   }
 
@@ -325,15 +341,21 @@ export class App {
     return this.#state;
   }
 
-  /** connected runs after rpc.hello: subscribe, then load the newest page. */
+  /**
+   * connected runs after rpc.hello: subscribe, then load the newest page
+   * and, in the full app, Activity and Approvals.
+   */
   async connected(): Promise<void> {
     this.#ready = true;
     this.#everReady = true;
     this.#failure = null;
     this.#render();
+    let views: Promise<unknown> = Promise.resolve();
     try {
       const working = await this.#api.subscribe();
       this.#state = subscribed(this.#state, working);
+      // After subscribing, so no event falls between a view's read and its events.
+      views = Promise.all([this.#activity?.load(), this.#approvals?.load()]);
       const firstLoad = !this.#state.loaded;
       const page = await this.#api.list({ limit: PAGE });
       this.#state = newestPage(this.#state, page);
@@ -347,6 +369,7 @@ export class App {
     const ask = this.#pendingAsk;
     this.#pendingAsk = null;
     if (ask !== null && this.#inputEl.value === ask.prompt) this.ask(ask.app, ask.prompt);
+    await views;
   }
 
   /** disconnected runs when the socket closes. */
@@ -365,6 +388,16 @@ export class App {
   event(params: unknown): void {
     const e = parseThreadEvent(params);
     if (e === null) return;
+    if (e.type === "activity") {
+      // A run may change a routine's last and next runs.
+      this.#activity?.entry(e.entry);
+      void this.#activity?.refreshRoutines();
+      return;
+    }
+    if (e.type === "turn") {
+      this.#approvals?.turn(e.turn);
+      this.#activity?.turn(e.turn);
+    }
     this.#state = applyEvent(this.#state, e);
     this.#render();
   }
@@ -486,19 +519,29 @@ export class App {
     this.#noteEl.hidden = note === null;
   }
 
-  // ---- capture cards ----
+  // ---- captures and approvals ----
 
   async #confirm(card: Card, text: string | undefined): Promise<void> {
     const notice = await this.#api.confirm(text === undefined ? { card: card.id } : { card: card.id, text });
-    this.#state = patchCard(this.#state, card.id, text === undefined ? { status: "done" } : { status: "done", text });
+    this.#settled(card.id, text === undefined ? { status: "done" } : { status: "done", text });
     this.#state = upsert(this.#state, [notice]);
     this.#render();
   }
 
   async #cancel(card: Card): Promise<void> {
     await this.#api.cancel({ card: card.id });
-    this.#state = patchCard(this.#state, card.id, { status: "cancelled" });
+    this.#settled(card.id, { status: "cancelled" });
     this.#render();
+  }
+
+  /**
+   * settled marks a card the owner acted on. The card's turn event usually
+   * comes first and may say the action failed, so only a card still
+   * pending changes.
+   */
+  #settled(cardID: string, patch: Partial<Omit<Card, "id">>): void {
+    if (findCard(this.#state, cardID)?.status === "pending") this.#state = patchCard(this.#state, cardID, patch);
+    this.#approvals?.settle(cardID, patch);
   }
 
   // ---- scrolling ----
@@ -550,6 +593,83 @@ export class App {
     return this.#loadingOlder;
   }
 
+  // ---- tabs (the full app) ----
+
+  #panel(view: HTMLElement, tab: Tab): HTMLElement {
+    view.id = `porter-${tab}`;
+    view.setAttribute("role", "tabpanel");
+    view.setAttribute("aria-labelledby", `porter-tab-${tab}`);
+    return view;
+  }
+
+  #buildTabs(): HTMLElement {
+    const tabs = el("div", "tabs");
+    tabs.setAttribute("role", "tablist");
+    tabs.setAttribute("aria-label", "Porter");
+    for (const { tab, label } of TABS) {
+      const b = el("button", "tab", label);
+      b.type = "button";
+      b.id = `porter-tab-${tab}`;
+      b.dataset.tab = tab;
+      b.setAttribute("role", "tab");
+      b.setAttribute("aria-controls", `porter-${tab}`);
+      b.addEventListener("click", () => this.#select(tab));
+      if (tab === "approvals") {
+        this.#badgeEl = el("span", "tab-count");
+        this.#badgeEl.hidden = true;
+        b.append(this.#badgeEl);
+      }
+      this.#tabEls.set(tab, b);
+      tabs.append(b);
+    }
+    // Arrow keys move between tabs (WAI-ARIA's tabs pattern).
+    tabs.addEventListener("keydown", (e) => {
+      const order = TABS.map((t) => t.tab);
+      const i = order.indexOf(this.#tab);
+      const to: Record<string, number> = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: order.length - 1 };
+      const j = to[e.key];
+      if (j === undefined) return;
+      const next = order[(j + order.length) % order.length] as Tab;
+      e.preventDefault();
+      this.#select(next);
+      this.#tabEls.get(next)?.focus();
+    });
+    return tabs;
+  }
+
+  /** select shows a tab: the thread with its input and search, Activity, or Approvals. */
+  #select(tab: Tab): void {
+    const leaving = this.#tab;
+    if (leaving === "thread" && tab !== "thread") this.#threadScroll = this.#threadEl.scrollTop;
+    this.#tab = tab;
+    for (const [t, b] of this.#tabEls) {
+      b.setAttribute("aria-selected", String(t === tab));
+      b.tabIndex = t === tab ? 0 : -1;
+    }
+    const thread = tab === "thread";
+    this.#wrapEl.hidden = !thread;
+    this.#composerEl.hidden = !thread;
+    if (this.#searchEl !== null) this.#searchEl.hidden = !thread;
+    if (this.#activity !== null) this.#activity.el.hidden = tab !== "activity";
+    if (this.#approvals !== null) this.#approvals.el.hidden = tab !== "approvals";
+    if (thread && leaving !== "thread") {
+      // A hidden element can lose its scroll position.
+      if (this.#pinned) this.#scrollToBottom();
+      else this.#threadEl.scrollTop = this.#threadScroll;
+    }
+    if (tab === "activity" && leaving !== "activity" && this.#ready) void this.#activity?.refreshRoutines();
+    this.#renderComposer();
+  }
+
+  #renderBadge(): void {
+    const badge = this.#badgeEl;
+    if (badge === null) return;
+    const n = this.#approvals?.count ?? 0;
+    badge.textContent = n === 0 ? "" : String(n);
+    badge.hidden = n === 0;
+    this.#tabEls.get("approvals")?.setAttribute("aria-label", n === 0 ? "Approvals" : `Approvals, ${n} waiting`);
+  }
+
   // ---- search (the full app) ----
 
   #buildHeader(wrap: HTMLElement): HTMLElement {
@@ -577,9 +697,13 @@ export class App {
         void this.#search("");
       }
     });
-    header.append(search);
+    this.#barStatusEl = el("div", "bar-status");
+    this.#barStatusEl.setAttribute("role", "status");
+    this.#barStatusEl.hidden = true;
+    header.append(this.#buildTabs(), search, this.#barStatusEl);
     wrap.append(results);
     this.#resultsEl = results;
+    this.#searchEl = search;
     return header;
   }
 
@@ -693,12 +817,16 @@ export class App {
     this.#sendEl.disabled = !this.#ready || isBusy || this.#inputEl.value.trim() === "";
     this.#inputEl.placeholder = !this.#ready ? "Connecting…" : isBusy ? "Porter is replying…" : "Message Porter";
     if (!isBusy && this.#note?.kind === "busy") this.#setNote(null);
-    if (this.#ready) {
-      this.#statusEl.hidden = true;
-      this.#statusEl.textContent = "";
-    } else {
-      this.#statusEl.hidden = false;
-      this.#statusEl.textContent = this.#failure ?? (this.#everReady ? "Reconnecting to Porter…" : "Connecting to Porter…");
+    const status = this.#ready
+      ? ""
+      : (this.#failure ?? (this.#everReady ? "Reconnecting to Porter…" : "Connecting to Porter…"));
+    this.#statusEl.textContent = status;
+    this.#statusEl.hidden = status === "";
+    // Off the thread, the input (and its status line) is hidden: say it in the bar.
+    if (this.#barStatusEl !== null) {
+      const bar = this.#tab === "thread" ? "" : status;
+      this.#barStatusEl.textContent = bar;
+      this.#barStatusEl.hidden = bar === "";
     }
     if (this.#note === null) this.#noteEl.hidden = true;
   }

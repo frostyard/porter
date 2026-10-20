@@ -1,6 +1,6 @@
 // Fakes for the bundle's tests: a transport that records calls and answers
-// from handlers, and made-up turns.
-import { Code, RpcError, type Card, type Transport, type Turn } from "../src/api";
+// from handlers, and made-up turns, Activity entries and routines.
+import { type Card, Code, type Entry, type Routine, RpcError, type Transport, type Turn } from "../src/api";
 
 export type Handler = (params: Record<string, unknown>) => unknown;
 
@@ -33,6 +33,43 @@ export function turn(id: number, patch: Partial<Turn> = {}): Turn {
 
 export function card(id: string, patch: Partial<Card> = {}): Card {
   return { id, kind: "tool", status: "done", app: "notes", tool: "read_note", summary: "Read Plan.md", ...patch };
+}
+
+export function entry(id: number, patch: Partial<Entry> = {}): Entry {
+  return {
+    id,
+    at: "2026-10-19T06:30:00Z",
+    kind: "run",
+    routine: "Morning brief",
+    ok: true,
+    text: "Wrote the brief.",
+    cards: [],
+    ...patch,
+  };
+}
+
+export function routine(name: string, patch: Partial<Routine> = {}): Routine {
+  return {
+    name,
+    path: `Porter/Routines/${name}.md`,
+    url: `/notes/1/Porter/Routines/${name}.md`,
+    valid: true,
+    schedule: "30 6 * * 1-5",
+    timezone: "Europe/Lisbon",
+    enabled: true,
+    ...patch,
+  };
+}
+
+/** deferred is a promise to settle by hand, for a call held in flight. */
+export function deferred<T>(): { promise: Promise<T>; resolve(v: T): void; reject(e: unknown): void } {
+  let resolve: (v: T) => void = () => {};
+  let reject: (e: unknown) => void = () => {};
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }
 
 /** flush lets pending promise callbacks and zero-delay timers run. */

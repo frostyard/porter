@@ -172,6 +172,7 @@ describe("the layout by role", () => {
     const { root } = make("companion");
     expect(root.querySelector("header")).toBeNull();
     expect(root.querySelector("input[type=search]")).toBeNull();
+    expect(root.querySelector(".tabs")).toBeNull();
   });
 
   it("searches in the full app, and scrolls to a result, loading older turns", async () => {

@@ -118,8 +118,9 @@ export function olderPage(s: ThreadState, page: TurnList): ThreadState {
   return settle({ ...s, turns: merge(s.turns, page.turns, fresher), more: page.more });
 }
 
-/** applyEvent applies a subscribed connection's event. */
+/** applyEvent applies a subscribed connection's event. An activity entry leaves the thread as it is. */
 export function applyEvent(s: ThreadState, e: ThreadEvent): ThreadState {
+  if (e.type === "activity") return s;
   if (e.type === "working") {
     if (e.working) return { ...s, working: true };
     return { ...s, working: false, awaiting: null, idleWhileSending: s.sending || s.idleWhileSending };
@@ -152,6 +153,15 @@ export function sendSucceeded(s: ThreadState, sent: Sent): ThreadState {
 export function sendFailed(s: ThreadState, conflict: boolean): ThreadState {
   const working = conflict && !s.idleWhileSending ? true : s.working;
   return { ...s, sending: false, idleWhileSending: false, working };
+}
+
+/** findCard returns the card with id from whichever loaded turn holds it. */
+export function findCard(s: ThreadState, cardID: string): Card | undefined {
+  for (const t of s.turns) {
+    const c = t.cards.find((x) => x.id === cardID);
+    if (c !== undefined) return c;
+  }
+  return undefined;
 }
 
 /** patchCard changes one card in whichever loaded turn holds it. */
