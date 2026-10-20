@@ -5,6 +5,7 @@ go 1.27.0
 require (
 	github.com/frostyard/lodge/kit v0.2.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
+	go.yaml.in/yaml/v3 v3.0.5
 	modernc.org/sqlite v1.60.1
 )
 

@@ -49,7 +49,17 @@ type Prompt struct {
 	Summary  string
 	Memory   string
 	Location *time.Location
+	// Routine is set for a routine's run.
+	Routine *RunSpec
 }
+
+// routineSection ends the system prompt of a routine's run.
+const routineSection = `
+
+This is a routine
+- You are running "{name}", one of {owner}'s scheduled routines. {owner} is not here to answer questions, so don't ask any: if something is unclear or missing, say so in your answer.
+- Your final answer is the routine's output{output}. Write only the output itself, in markdown, with no preamble and no sign-off.
+- You may read anything your tools reach, write mail drafts, and write notes in Porter/. Anything else, such as flagging or moving mail, tasks, or the daily note, becomes an approval card for {owner}: call the tool, and say in your answer what waits for their approval.`
 
 // String returns the filled system prompt.
 func (p Prompt) String() string {
@@ -66,6 +76,15 @@ func (p Prompt) String() string {
 	if summary == "" {
 		summary = "(nothing yet)"
 	}
+	routine := ""
+	if r := p.Routine; r != nil {
+		summary = "(a routine does not see the thread)"
+		output := ""
+		if r.Output != "" {
+			output = ", written to the note " + r.Output
+		}
+		routine = strings.NewReplacer("{name}", r.Name, "{output}", output).Replace(routineSection)
+	}
 	memory := strings.TrimSpace(p.Memory)
 	if memory == "" {
 		memory = "(nothing yet)"
@@ -79,7 +98,7 @@ func (p Prompt) String() string {
 		"{context}", describe(p.Context),
 		"{summary}", summary,
 		"{memory}", memory,
-	).Replace(systemPrompt)
+	).Replace(systemPrompt + routine)
 }
 
 // describe says what a context points at, for the model.

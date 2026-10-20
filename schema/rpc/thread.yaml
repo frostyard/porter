@@ -20,13 +20,14 @@ enums:
     values:
       - {name: tool, doc: "A tool Porter called: its app, its tool, a one-line summary, and a link."}
       - {name: capture, doc: "Text Porter proposes to append to today's daily note, waiting for the owner's confirmation."}
+      - {name: approval, doc: "An action a routine proposed but may not take unattended, such as flagging mail: app, tool and args name it, and it runs only when the owner approves it."}
   - name: CardStatus
     doc: Where a card stands.
     values:
-      - {name: done, doc: "The tool ran, or the capture was appended."}
-      - {name: failed, doc: "The tool, or the append, failed; detail says why."}
-      - {name: pending, doc: "A capture waiting for the owner."}
-      - {name: cancelled, doc: "A capture the owner cancelled."}
+      - {name: done, doc: "The tool ran, the capture was appended, or the approved action ran."}
+      - {name: failed, doc: "The tool, the append or the approved action failed; detail says why."}
+      - {name: pending, doc: "A capture or an approval waiting for the owner."}
+      - {name: cancelled, doc: "A capture the owner cancelled, or an approval they dismissed."}
 types:
   - name: Context
     doc: What the current app reported as on screen (lodge-client's context), as a chip in the thread.
@@ -47,7 +48,7 @@ types:
       - {name: url, type: string, optional: true, doc: "A lodge address for what it touched, opened with lodge.open."}
       - {name: text, type: string, optional: true, doc: "For a capture, the text to append."}
       - {name: detail, type: string, optional: true, doc: "Why it failed."}
-      - {name: args, type: string, optional: true, doc: "The tool call's arguments as a JSON object, long strings shortened; porterd replays it to the model as history."}
+      - {name: args, type: string, optional: true, doc: "The tool call's arguments as a JSON object. For an approval they are whole, what it runs with; otherwise long strings are shortened, and porterd replays them to the model as history."}
   - name: Turn
     doc: One turn of the thread.
     fields:
@@ -98,24 +99,31 @@ methods:
     errors: [invalidParams]
   - name: confirm
     doc: >-
-      Confirm a pending capture card: append its text, or the owner's edit
-      of it, to today's daily note. Answers the notice turn it writes.
+      Confirm a pending card. A capture appends its text, or the owner's
+      edit of it, to today's daily note; an approval runs its action.
+      Answers the notice turn it writes.
     params:
-      - {name: card, type: string, doc: "The capture card's id."}
-      - {name: text, type: string, optional: true, doc: "The text as the owner edited it; absent to append the card's text."}
+      - {name: card, type: string, doc: "The card's id."}
+      - {name: text, type: string, optional: true, doc: "For a capture, the text as the owner edited it; absent to append the card's text."}
     result: Turn
     errors: [notFound, conflict, unavailable]
   - name: cancel
-    doc: Cancel a pending capture card.
+    doc: Cancel a pending capture, or dismiss a pending approval.
     params:
-      - {name: card, type: string, doc: "The capture card's id."}
+      - {name: card, type: string, doc: "The card's id."}
     errors: [notFound, conflict]
+  - name: pending
+    doc: >-
+      The turns holding a pending capture or approval, newest first (unlike
+      list), at most 100; more is always false.
+    result: TurnList
   - name: subscribe
     doc: >-
       Deliver this connection's events from now on, as JSON-RPC
       notifications of method "event" whose params are lodge's kit
       envelope, {event, data}: event "turn" with a Turn as data (a turn
-      with an id already shown replaces it), or event "working" with
-      Working as data. Other event names are ignored by clients. Answers
-      whether a reply is in progress.
+      with an id already shown replaces it), event "working" with Working
+      as data, or event "activity" with an activity Entry as data. Other
+      event names are ignored by clients. Answers whether a reply is in
+      progress.
     result: bool

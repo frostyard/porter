@@ -1,0 +1,62 @@
+# The activity domain: what Porter does on its own, for the full app's
+# Activity view (docs/design/overview.md, The UI). api/activity.go is what a
+# generator writes from this file, by hand until the app adopts one.
+domain: activity
+protocol: 1
+callers: [local, session]
+doc: >-
+  Routine runs, skipped and missed runs, and invalid routines
+  (docs/specs/routines.md), newest first, and the routines porterd knows.
+  New entries also arrive as thread events of name "activity".
+enums:
+  - name: EntryKind
+    doc: What an entry records.
+    values:
+      - {name: run, doc: "A routine ran: ok says whether it succeeded, url links its output note, and cards are what it did or proposes."}
+      - {name: skipped, doc: "A routine's time came while its last run was still going, so that time was skipped."}
+      - {name: missed, doc: "porterd was down at a routine's time, more than 6 hours ago, so it did not run."}
+      - {name: invalid, doc: "A routine is invalid and does not run; text says why."}
+types:
+  - name: Entry
+    doc: One thing Porter did or noticed on its own.
+    fields:
+      - {name: id, type: int, doc: "The entry's id, increasing."}
+      - {name: at, type: string, doc: "When it was recorded, RFC 3339 in UTC."}
+      - {name: kind, type: EntryKind, doc: "What it records."}
+      - {name: routine, type: string, doc: "The routine's name, its file name without .md."}
+      - {name: ok, type: bool, doc: "For a run, whether it succeeded; false otherwise."}
+      - {name: text, type: string, doc: "One line: what happened, or why."}
+      - {name: url, type: string, optional: true, doc: "For a run, a lodge address of its output note."}
+      - {name: turn, type: int, optional: true, doc: "The thread turn that reported it."}
+      - {name: cards, type: "[]Card", doc: "For a run, what it did or proposes: drafts, notes written, approvals, as they stand now (an approval shows whether it was approved since)."}
+  - name: EntryList
+    doc: A page of Activity, newest first.
+    fields:
+      - {name: entries, type: "[]Entry", doc: "The entries, newest first."}
+      - {name: more, type: bool, doc: "Whether older entries exist after the last."}
+  - name: Routine
+    doc: A routine as porterd last read it from Porter/Routines/.
+    fields:
+      - {name: name, type: string, doc: "Its name, the file name without .md."}
+      - {name: path, type: string, doc: "Its note's path in the vault."}
+      - {name: url, type: string, optional: true, doc: "A lodge address of its note."}
+      - {name: valid, type: bool, doc: "Whether it parses and passes every rule; an invalid routine never runs."}
+      - {name: error, type: string, optional: true, doc: "Why it is invalid."}
+      - {name: schedule, type: string, doc: "Its five cron fields, as written."}
+      - {name: timezone, type: string, doc: "The zone its schedule is in."}
+      - {name: output, type: string, optional: true, doc: "Its output path template."}
+      - {name: enabled, type: bool, doc: "Whether it runs; false keeps it without running it."}
+      - {name: next, type: string, optional: true, doc: "When it runs next, RFC 3339 in UTC; absent when invalid or disabled."}
+      - {name: last, type: string, optional: true, doc: "When it last ran, RFC 3339 in UTC."}
+      - {name: lastOk, type: bool, optional: true, doc: "Whether its last run succeeded."}
+methods:
+  - name: list
+    doc: A page of Activity, the newest entries before `before`, newest first.
+    params:
+      - {name: before, type: int, optional: true, doc: "Only entries with a smaller id; absent for the newest."}
+      - {name: limit, type: int, optional: true, doc: "At most this many, 1 to 200; default 50."}
+    result: EntryList
+    errors: [invalidParams]
+  - name: routines
+    doc: The routines in Porter/Routines/, by name, valid or not.
+    result: "[]Routine"

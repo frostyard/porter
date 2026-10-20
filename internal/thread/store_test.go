@@ -2,8 +2,10 @@ package thread
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/frostyard/porter/api"
 )
@@ -135,4 +137,57 @@ func ids(ts []api.Turn) []int64 {
 		out = append(out, t.ID)
 	}
 	return out
+}
+
+func TestActivityAndRoutineState(t *testing.T) {
+	s := open(t)
+	ctx := t.Context()
+	for i := range 3 {
+		if _, err := s.AddEntry(ctx, api.Entry{Kind: api.EntryRun, Routine: "Morning brief", OK: i != 1, Text: fmt.Sprint("run ", i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	es, more, err := s.Entries(ctx, 0, 2)
+	if err != nil || !more || len(es) != 2 || es[0].Text != "run 2" || es[1].OK || es[0].Cards == nil {
+		t.Fatalf("entries = %+v, more %v, err %v", es, more, err)
+	}
+	if es, more, _ = s.Entries(ctx, es[1].ID, 2); more || len(es) != 1 || es[0].Text != "run 0" {
+		t.Fatalf("the older page = %+v %v", es, more)
+	}
+
+	st, err := s.SeeRoutine(ctx, "Morning brief", time.Now())
+	if err != nil || st.FirstSeen.IsZero() || !st.LastScheduled.IsZero() || st.LastOK != nil {
+		t.Fatalf("a new routine's state = %+v, %v", st, err)
+	}
+	ran := time.Date(2026, 10, 20, 10, 30, 0, 0, time.UTC)
+	if err := s.SetRan(ctx, "Morning brief", ran, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetReported(ctx, "Morning brief", "h1"); err != nil {
+		t.Fatal(err)
+	}
+	again, _ := s.SeeRoutine(ctx, "Morning brief", time.Now())
+	if !again.FirstSeen.Equal(st.FirstSeen) || !again.LastScheduled.Equal(ran) || again.LastOK == nil || !*again.LastOK || again.Reported != "h1" {
+		t.Fatalf("the state after a run = %+v", again)
+	}
+}
+
+func TestPendingFindsCapturesAndApprovals(t *testing.T) {
+	s := open(t)
+	ctx := t.Context()
+	add := func(cards ...api.Card) int64 {
+		tn, err := s.Add(ctx, api.Turn{Role: api.RoleNotice, Text: "x", Cards: cards, Done: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tn.ID
+	}
+	add(api.Card{ID: "a", Kind: api.CardTool, Status: api.StatusDone})
+	capture := add(api.Card{ID: "b", Kind: api.CardCapture, Status: api.StatusPending})
+	add(api.Card{ID: "c", Kind: api.CardApproval, Status: api.StatusCancelled})
+	approval := add(api.Card{ID: "d", Kind: api.CardTool, Status: api.StatusDone}, api.Card{ID: "e", Kind: api.CardApproval, Status: api.StatusPending})
+	ts, err := s.Pending(ctx, 10)
+	if err != nil || len(ts) != 2 || ts[0].ID != approval || ts[1].ID != capture {
+		t.Fatalf("pending = %+v, %v", ts, err)
+	}
 }

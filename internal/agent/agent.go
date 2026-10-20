@@ -104,46 +104,75 @@ func (a *Agent) reply(ctx context.Context, owner api.Turn, reply api.Turn) (api.
 		return reply, err
 	}
 	offered, down := a.Registry.Tools(ctx, false)
-	defs := make([]ToolDef, 0, len(offered))
-	for _, t := range offered {
-		defs = append(defs, ToolDef{Type: "function", Function: FuncDef{Name: t.Name, Description: t.Description, Parameters: t.Schema}})
-	}
+	defs := toolDefs(offered, "")
 	if len(down) > 0 {
 		msgs[0].Content = text(*msgs[0].Content + "\n\nUnavailable right now: " + strings.Join(down, ", ") + ". Say so if the owner asks for them.")
 	}
-	seen := knownIDs(owner, msgs)
+	answer, cards, err := a.loop(ctx, msgs, defs, knownIDs(owner, msgs), mode{
+		prio: inference.Interactive, alias: a.Alias, what: fmt.Sprintf("turn %d", reply.ID),
+		onCard: func(cs []api.Card) { reply.Cards = cs; a.save(ctx, reply) },
+	})
+	if cards != nil {
+		reply.Cards = cards
+	}
+	reply.Text = answer
+	return reply, err
+}
+
+// mode is how the loop runs: for a chat reply, or for a routine.
+type mode struct {
+	prio     inference.Priority
+	alias    string
+	thinking bool
+	// unattended is a routine's run: only the unattended tools run, and
+	// any other tool offered becomes an approval card (ADR-0004).
+	unattended bool
+	// what names the run in logs.
+	what string
+	// onCard, if set, sees the cards each time one is added.
+	onCard func([]api.Card)
+}
+
+// ErrTooManyCalls means a routine's run called more than MaxToolCalls
+// tools.
+var ErrTooManyCalls = fmt.Errorf("called more than %d tools", MaxToolCalls)
+
+// loop asks the model, runs the tools it calls, and returns its final
+// answer and the cards of what it did.
+func (a *Agent) loop(ctx context.Context, msgs []Message, defs []ToolDef, seen idSet, m mode) (string, []api.Card, error) {
+	var cards []api.Card
 	calls := 0
 	nudged := false
 	choice := ""
 	for {
-		req := &Request{Model: a.Alias, Messages: msgs, Tools: defs, ToolChoice: choice,
-			TemplateArgs: map[string]any{"enable_thinking": false}}
-		res, err := a.Model.Chat(ctx, inference.Interactive, req)
-		if err != nil && choice != "" {
+		req := &Request{Model: m.alias, Messages: msgs, Tools: defs, ToolChoice: choice,
+			TemplateArgs: map[string]any{"enable_thinking": m.thinking}}
+		res, err := a.Model.Chat(ctx, m.prio, req)
+		if err != nil && choice != "" && ctx.Err() == nil {
 			// A provider that can't require a tool call still gets the nudge.
 			a.log().Warn("the model refused tool_choice; asking without it", "err", err)
 			req.ToolChoice = ""
-			res, err = a.Model.Chat(ctx, inference.Interactive, req)
+			res, err = a.Model.Chat(ctx, m.prio, req)
 		}
 		choice = ""
 		if err != nil {
-			return reply, fmt.Errorf("the model: %w", err)
+			return "", cards, fmt.Errorf("the model: %w", err)
 		}
 		if len(res.Choices) == 0 {
-			return reply, errors.New("the model answered nothing")
+			return "", cards, errors.New("the model answered nothing")
 		}
-		m := res.Choices[0].Message
-		if len(m.ToolCalls) == 0 {
+		msg := res.Choices[0].Message
+		if len(msg.ToolCalls) == 0 {
 			answer := ""
-			if m.Content != nil {
-				answer = strings.TrimSpace(*m.Content)
+			if msg.Content != nil {
+				answer = strings.TrimSpace(*msg.Content)
 			}
-			// Never let the reply claim an action no tool took: send the
-			// model back once, then say so on the reply.
-			if names := unbacked(answer, reply.Cards); len(names) > 0 {
+			// Never let the answer claim an action no tool took: send the
+			// model back once, then say so on the answer.
+			if names := unbacked(answer, cards); len(names) > 0 {
 				if !nudged {
 					nudged = true
-					a.log().Warn("a reply claimed actions no tool took; asking again", "turn", reply.ID, "claims", names)
+					a.log().Warn("an answer claimed actions no tool took; asking again", "run", m.what, "claims", names)
 					msgs = append(msgs, Message{Role: "assistant", Content: text(answer)},
 						Message{Role: "user", Content: text(nudge(names))})
 					if len(defs) > 0 {
@@ -151,34 +180,51 @@ func (a *Agent) reply(ctx context.Context, owner api.Turn, reply api.Turn) (api.
 					}
 					continue
 				}
-				a.log().Warn("a reply still claimed actions no tool took", "turn", reply.ID, "claims", names)
+				a.log().Warn("an answer still claimed actions no tool took", "run", m.what, "claims", names)
 				answer += unbackedNote
 			}
-			reply.Text = answer
-			return reply, nil
+			return answer, cards, nil
 		}
-		msgs = append(msgs, Message{Role: "assistant", Content: m.Content, ToolCalls: m.ToolCalls})
-		for _, call := range m.ToolCalls {
+		msgs = append(msgs, Message{Role: "assistant", Content: msg.Content, ToolCalls: msg.ToolCalls})
+		for _, call := range msg.ToolCalls {
 			calls++
 			var out string
-			if calls > MaxToolCalls {
+			switch {
+			case calls > MaxToolCalls && m.unattended:
+				return "", cards, ErrTooManyCalls
+			case calls > MaxToolCalls:
 				out = "Too many tool calls in one reply. Answer with what you have."
-			} else {
+			default:
 				var card api.Card
-				out, card = a.call(ctx, call, seen)
-				reply.Cards = append(reply.Cards, card)
-				a.save(ctx, reply)
+				out, card = a.call(ctx, call, seen, m.unattended)
+				cards = append(cards, card)
+				if m.onCard != nil {
+					m.onCard(cards)
+				}
 			}
 			msgs = append(msgs, Message{Role: "tool", ToolCallID: call.ID, Content: text(out)})
 		}
 		if calls > MaxToolCalls+4 {
-			return reply, errors.New("the model kept calling tools past the limit")
+			return "", cards, errors.New("the model kept calling tools past the limit")
 		}
 	}
 }
 
+// toolDefs offers tools to the model, each description after prefix.
+func toolDefs(ts []tools.Tool, prefix string) []ToolDef {
+	defs := make([]ToolDef, 0, len(ts))
+	for _, t := range ts {
+		defs = append(defs, ToolDef{Type: "function", Function: FuncDef{Name: t.Name, Description: prefix + t.Description, Parameters: t.Schema}})
+	}
+	return defs
+}
+
+// maxApprovalArgs bounds the arguments an approval card keeps whole.
+const maxApprovalArgs = 16 << 10
+
 // call runs one tool call and returns what the model reads, and the card.
-func (a *Agent) call(ctx context.Context, call ToolCall, seen idSet) (string, api.Card) {
+// Unattended, a tool that is not unattended becomes an approval card.
+func (a *Agent) call(ctx context.Context, call ToolCall, seen idSet, unattended bool) (string, api.Card) {
 	card := api.Card{ID: a.cardID(), Kind: api.CardTool, Status: api.StatusDone, Tool: call.Function.Name}
 	var args map[string]any
 	if s := strings.TrimSpace(call.Function.Arguments); s != "" && s != "null" {
@@ -191,14 +237,16 @@ func (a *Agent) call(ctx context.Context, call ToolCall, seen idSet) (string, ap
 	app, tool, _ := strings.Cut(call.Function.Name, "__")
 	card.App, card.Tool = app, tool
 	card.Summary = Summarize(tool, args)
-	if app == "notes" && tool == "append_to_daily_note" {
+	capture := app == "notes" && tool == "append_to_daily_note"
+	if capture && !unattended {
 		// Capture: shown to the owner, appended only once they confirm.
 		t, _ := args["text"].(string)
 		card.Kind, card.Status, card.Text = api.CardCapture, api.StatusPending, t
 		card.Summary = "Append to today's daily note"
 		return "This text is shown to the owner with Confirm and Cancel; nothing is appended until they confirm. Tell them it is waiting for their confirmation.", card
 	}
-	if tl, ok := a.Registry.Lookup(ctx, call.Function.Name); ok && tl.Kind != tools.Read {
+	tl, known := a.Registry.Lookup(ctx, call.Function.Name)
+	if known && tl.Kind != tools.Read {
 		if bad := seen.unseen(args); len(bad) > 0 {
 			slices.Sort(bad)
 			card.Status, card.Detail = api.StatusFailed, "used an id no tool returned: "+strings.Join(bad, ", ")
@@ -206,7 +254,22 @@ func (a *Agent) call(ctx context.Context, call ToolCall, seen idSet) (string, ap
 				"Find it with a search or list tool first, then use exactly the id that tool returns.", card
 		}
 	}
-	tl, res, err := a.Registry.Call(ctx, call.Function.Name, args, false)
+	if unattended && known && !tl.Kind.Unattended() {
+		// An approval: the owner sees it with Approve and Dismiss, and it
+		// runs, with its arguments whole, only once they approve.
+		full, err := json.Marshal(args)
+		if err != nil || len(full) > maxApprovalArgs {
+			card.Status, card.Detail = api.StatusFailed, "the arguments are too long to propose"
+			return "Refused: the arguments are too long to propose for approval.", card
+		}
+		card.Kind, card.Status, card.Args = api.CardApproval, api.StatusPending, string(full)
+		if capture {
+			card.Text, _ = args["text"].(string)
+			card.Summary = "Append to today's daily note"
+		}
+		return "Proposed to the owner as an approval card; nothing is done unless they approve it. Say in your answer what waits for their approval.", card
+	}
+	tl, res, err := a.Registry.Call(ctx, call.Function.Name, args, unattended)
 	if tl.App != "" {
 		card.App = tl.App
 	}

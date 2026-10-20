@@ -57,7 +57,7 @@ func startWith(t *testing.T, m agent.Model) (*app, *kittest.Lodge) {
 	ctx, cancel := context.WithCancel(context.Background())
 	svc := service.New(ctx, store, ag, nil)
 	t.Cleanup(func() { cancel(); svc.Wait() })
-	a, err := newApp(slog.New(slog.DiscardHandler), svc)
+	a, err := newApp(slog.New(slog.DiscardHandler), svc, service.NewActivity(store, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,5 +208,35 @@ func TestAThreadOverTheSession(t *testing.T) {
 	}
 	if _, err := c.Thread().Send(t.Context(), &api.ThreadSendParams{Text: ""}); err == nil {
 		t.Fatal("an empty message was accepted")
+	}
+}
+
+// Activity and the pending cards answer over a browser session, empty at
+// first.
+func TestActivityOverTheSession(t *testing.T) {
+	_, l := start(t)
+	nc, err := l.DialAPI(t.Context(), kittest.Session())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := api.NewClient(nc)
+	defer c.Close()
+	if _, err := c.RPC().Hello(t.Context(), &api.RPCHelloParams{Protocol: api.Protocol, Client: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	es, err := c.Activity().List(t.Context(), &api.ActivityListParams{})
+	if err != nil || es.Entries == nil || len(es.Entries) != 0 || es.More {
+		t.Fatalf("activity.list = %+v, %v", es, err)
+	}
+	if _, err := c.Activity().List(t.Context(), &api.ActivityListParams{Limit: 500}); err == nil {
+		t.Error("a limit of 500 was accepted")
+	}
+	rs, err := c.Activity().Routines(t.Context(), &api.ActivityRoutinesParams{})
+	if err != nil || rs == nil || len(rs) != 0 {
+		t.Fatalf("activity.routines = %+v, %v", rs, err)
+	}
+	p, err := c.Thread().Pending(t.Context(), &api.ThreadPendingParams{})
+	if err != nil || len(p.Turns) != 0 {
+		t.Fatalf("thread.pending = %+v, %v", p, err)
 	}
 }
