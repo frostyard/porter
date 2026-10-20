@@ -91,6 +91,32 @@ Tool results are wrapped as content from their app, never as instructions.
 In chat the priority is `interactive`, with thinking off for tool steps.
 Routines use their own `thinking` and `model`.
 
+### Holding the model to what it did
+
+The local model copies how past replies went, and in its first live use
+(2026-10-19) it wrote "Draft ready" four times without calling a tool. It
+also drafted on a guessed message id. porterd now checks the model rather
+than trusting it:
+- **History:** each past reply is replayed as the tool calls it made (a
+  card keeps its arguments, with long strings shortened), then each call's
+  outcome, then its text. The full results are not kept.
+- **Failed exchanges are left out:** a reply that claimed an action no
+  card shows is left out, with the owner's turn it answered. It is left
+  out of the history and of `search_thread`. A placeholder in its place
+  was copied word for word, so none is used.
+- **The claim check:** a new answer's claims (a draft, a capture,
+  memory, a task) are checked against this reply's cards. So is any repeat
+  of porterd's own notes or markers. An unbacked answer is sent back once
+  with `tool_choice: required`. If the claim is still unbacked, the reply
+  says that nothing was done.
+- **Ids:** a tool that is not a read takes only ids it can trace:
+  - ids a tool returned in this reply;
+  - ids the owner wrote;
+  - ids the screen shows;
+  - ids an earlier successful call used.
+
+  Any other id is refused, and nothing is done.
+
 ### The system prompt (draft 1)
 
 Placeholders in {braces} are filled on every request.
@@ -112,6 +138,10 @@ Placeholders in {braces} are filled on every request.
 >   first with a search or list tool, and use exactly the id that tool
 >   returned. If several match, ask which.
 > - If a request is ambiguous, ask one short question instead of guessing.
+> - Only say you did something (drafted, captured, created, flagged,
+>   remembered) when a tool call in this reply did it. Earlier replies don't
+>   count: their text is not an action. If no tool can do what was asked,
+>   say so plainly.
 >
 > **What you may do**
 > - Read anything your tools reach.
