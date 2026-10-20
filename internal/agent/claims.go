@@ -30,10 +30,26 @@ var claims = []claim{
 		}},
 }
 
+// echoes are porterd's own words: notes it adds to a reply, and markers
+// earlier versions put in the history. A reply that repeats one copied the
+// history instead of answering (the model once answered with a history
+// placeholder, word for word).
+var echoes = []string{"[Done in this reply", "[No tool was called", "This reply is left out",
+	"called no tool to do it", "Check before you answer"}
+
+// echo names a reply that repeats porterd's own words.
+const echo = "echo"
+
 // unbacked returns the names of the actions text claims that none of
-// cards shows.
+// cards shows, and echo if it repeats porterd's own words.
 func unbacked(text string, cards []api.Card) []string {
 	var out []string
+	for _, e := range echoes {
+		if strings.Contains(text, e) {
+			out = append(out, echo)
+			break
+		}
+	}
 	for _, cl := range claims {
 		if !cl.said.MatchString(text) {
 			continue
@@ -55,6 +71,10 @@ func unbacked(text string, cards []api.Card) []string {
 // nudge is what the model reads when its answer claims actions no tool
 // took.
 func nudge(names []string) string {
+	if names[0] == echo {
+		return "Check before you answer: your reply repeated a note from porterd instead of answering. " +
+			"Answer the owner's last message. If it asks for an action, call the tool that does it."
+	}
 	return "Check before you answer: your reply says you did this (" + strings.Join(names, ", ") +
 		"), but you called no tool that did it in this reply, so nothing was done. " +
 		"If the owner asked for it, call the tool now. Otherwise answer again without claiming it."

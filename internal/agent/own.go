@@ -24,7 +24,7 @@ func OwnTools(store *thread.Store, loc *time.Location, notes *tools.App, now fun
 	}
 	own := []tools.Own{
 		{Tool: tools.Tool{Tool: "search_thread", Kind: tools.Read,
-			Description: "Search this whole conversation with the owner, including what the summary left out. Returns matching turns, newest first.",
+			Description: "Search this whole conversation with the owner, including what the summary left out. Returns matching turns, newest first, Porter's with the tools it called.",
 			Schema:      tools.ObjectSchema(map[string]string{"query": "Words to find."}, "query")},
 			Call: func(ctx context.Context, args map[string]any) (tools.Result, error) {
 				q, _ := args["query"].(string)
@@ -33,18 +33,28 @@ func OwnTools(store *thread.Store, loc *time.Location, notes *tools.App, now fun
 					return tools.Result{}, err
 				}
 				type hit struct {
-					ID   int64  `json:"id"`
-					At   string `json:"at"`
-					Role string `json:"role"`
-					Text string `json:"text"`
+					ID     int64    `json:"id"`
+					At     string   `json:"at"`
+					Role   string   `json:"role"`
+					Text   string   `json:"text"`
+					Called []string `json:"called,omitzero"`
 				}
 				hits := []hit{}
 				for _, t := range ts {
+					// A reply that claimed what no tool did is left out here
+					// too, as in the history.
+					if t.Role == api.RolePorter && len(unbacked(t.Text, t.Cards)) > 0 {
+						continue
+					}
 					s := t.Text
 					if len(s) > 600 {
 						s = s[:600] + "…"
 					}
-					hits = append(hits, hit{t.ID, t.At, string(t.Role), s})
+					h := hit{ID: t.ID, At: t.At, Role: string(t.Role), Text: s}
+					for _, c := range t.Cards {
+						h.Called = append(h.Called, outcome(c))
+					}
+					hits = append(hits, h)
 				}
 				b, err := json.Marshal(map[string]any{"turns": hits})
 				return tools.Result{Text: string(b)}, err

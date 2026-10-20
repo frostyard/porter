@@ -231,10 +231,19 @@ func (a *Agent) messages(ctx context.Context, owner api.Turn) ([]Message, error)
 		return nil, err
 	}
 	// Drop the owner's turn and anything after it; keep the newest that fit.
+	// The model copies how past replies went, so a reply that claimed an
+	// action no tool took is left out, with the owner's turn it answered;
+	// a placeholder in its place was copied word for word.
 	var past []api.Turn
 	for _, t := range turns {
 		if t.ID >= owner.ID {
 			break
+		}
+		if t.Role == api.RolePorter && len(unbacked(t.Text, t.Cards)) > 0 {
+			if n := len(past); n > 0 && past[n-1].Role == api.RoleOwner {
+				past = past[:n-1]
+			}
+			continue
 		}
 		past = append(past, t)
 	}
@@ -259,8 +268,7 @@ func (a *Agent) messages(ctx context.Context, owner api.Turn) ([]Message, error)
 
 // asMessages gives the model a past turn: an owner's as theirs, a notice
 // as Porter's, and Porter's as the tool calls it made, their outcomes and
-// its text. The model learns from the history how replies go, so a past
-// reply that claimed an action no tool took is left out rather than shown.
+// its text.
 func asMessages(t api.Turn) []Message {
 	switch t.Role {
 	case api.RoleOwner:
@@ -284,18 +292,10 @@ func asMessages(t api.Turn) []Message {
 				out = append(out, Message{Role: "tool", ToolCallID: c.ID, Content: text(outcome(c))})
 			}
 		}
-		s := t.Text
-		if len(unbacked(s, t.Cards)) > 0 {
-			s = leftOut
-		}
-		return append(out, Message{Role: "assistant", Content: text(s)})
+		return append(out, Message{Role: "assistant", Content: text(t.Text)})
 	}
 	return []Message{{Role: "assistant", Content: text("[Notice] " + t.Text)}}
 }
-
-// leftOut stands in the history for a reply that claimed an action no tool
-// took.
-const leftOut = "(This reply is left out: it said something was done, but no tool was called, so nothing was.)"
 
 // outcome is what the history says a past card's tool returned; the full
 // result is not kept.

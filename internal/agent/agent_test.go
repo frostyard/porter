@@ -371,13 +371,11 @@ func TestAClaimThatStaysUnbackedIsMarked(t *testing.T) {
 	r.model.answers = []Message{say("ok")}
 	r.ask(t, "and?", nil)
 	last := r.model.requests[len(r.model.requests)-1].Messages
-	for _, m := range last {
-		if m.Content != nil && strings.Contains(*m.Content, "Draft ready") {
-			t.Errorf("the history repeats an unbacked claim: %q", *m.Content)
-		}
-	}
-	if !slices.ContainsFunc(last, func(m Message) bool { return m.Content != nil && *m.Content == leftOut }) {
-		t.Error("the history does not leave out a reply that claimed what no tool did")
+	// The exchange is left out of the history: the claim and the request.
+	if slices.ContainsFunc(last, func(m Message) bool {
+		return m.Content != nil && (strings.Contains(*m.Content, "Draft ready") || strings.Contains(*m.Content, "reply to Victor"))
+	}) || len(last) != 2 {
+		t.Errorf("the history keeps an exchange whose reply claimed what no tool did: %d messages", len(last))
 	}
 }
 
@@ -402,10 +400,27 @@ func TestClaimsMatchTheirCards(t *testing.T) {
 		{"Friday 2pm is clear on your calendar.", nil, ""},
 		{"Want me to draft a reply?", nil, ""},
 		{"I can't edit drafts, only create them.", nil, ""},
+		{"(This reply is left out: it said something was done, but no tool was called, so nothing was.)", nil, "echo"},
+		{"Done.\n[Done in this reply: draft reply 12]", []api.Card{draft}, "echo"},
 	} {
 		got := strings.Join(unbacked(c.text, c.cards), ",")
 		if got != c.want {
 			t.Errorf("unbacked(%q) = %q, want %q", c.text, got, c.want)
 		}
+	}
+}
+
+func TestSearchThreadLeavesOutUnbackedReplies(t *testing.T) {
+	r := newRig(t,
+		say("Draft ready for Victor, waiting in Drafts."),
+		say("New draft created for Victor."),
+		callTool("porter__search_thread", `{"query":"Victor"}`),
+		say("ok"))
+	r.ask(t, "draft a reply to Victor", nil)
+	r.ask(t, "what did we say about Victor?", nil)
+	last := r.model.requests[len(r.model.requests)-1].Messages
+	res := last[len(last)-1]
+	if res.Role != "tool" || !strings.Contains(*res.Content, "draft a reply to Victor") || strings.Contains(*res.Content, "Draft ready") {
+		t.Fatalf("search_thread's result = %+v", *res.Content)
 	}
 }
