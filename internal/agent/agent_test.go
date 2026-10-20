@@ -152,7 +152,7 @@ func newRig(t *testing.T, answers ...Message) *rig {
 	clock := func() time.Time { return time.Date(2026, 10, 20, 7, 30, 0, 0, time.UTC) }
 	a := &Agent{Store: store, Model: r.model, Alias: "local", Owner: "Ann", Location: time.UTC, Now: clock,
 		Emit: func(t api.Turn) { r.mu.Lock(); r.turns = append(r.turns, t); r.mu.Unlock() }}
-	a.Registry = tools.NewRegistry(nil, []*tools.App{app}, OwnTools(store, time.UTC, app, clock, a.forgetMemory)...)
+	a.Registry = tools.NewRegistry(nil, []*tools.App{app}, OwnTools(store, time.UTC, app, clock, a.ForgetMemory)...)
 	r.agent = a
 	return r
 }

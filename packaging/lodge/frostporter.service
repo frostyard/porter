@@ -1,6 +1,8 @@
 # Porter's daemon, lodge's porter app (lodge's app-contract.md). It runs as
-# its own system user, in group lodge-apps for inference and never in
-# group lodge, and listens on no network.
+# its own system user, in group lodge-apps for inference and lodge-agents
+# for the apps' MCP, never in group lodge, and listens on no network. Its
+# configuration is /etc/porter/porter.json, and each app's token is in
+# /var/lib/frostporter/tokens (porterd token set APP).
 [Unit]
 Description=Porter, behind lodge
 Requires=frostporter.socket
@@ -10,7 +12,7 @@ After=frostporter.socket
 Type=exec
 User=frostporter
 Group=frostporter
-SupplementaryGroups=lodge-apps
+SupplementaryGroups=lodge-apps lodge-agents
 ExecStart=/usr/local/bin/porterd
 StateDirectory=frostporter
 StateDirectoryMode=0700

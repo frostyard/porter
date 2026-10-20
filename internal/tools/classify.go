@@ -20,10 +20,10 @@ var known = map[string]map[string]Kind{
 		"list_collections": Read, "list_events": Read, "read_event": Read,
 		"list_tasks": Read, "read_task": Read, "search_contacts": Read, "read_contact": Read,
 		"threads_awaiting_reply": Read, "threads_awaiting_others": Read,
-		"draft_reply":  Draft,
-		"set_flags":    Change, "move_messages": Change,
-		"create_task":  Change, "complete_task": Change, "remind_me": Change,
-		"send_draft":   Never,
+		"draft_reply": Draft,
+		"set_flags":   Change, "move_messages": Change,
+		"create_task": Change, "complete_task": Change, "remind_me": Change,
+		"send_draft": Never,
 	},
 }
 

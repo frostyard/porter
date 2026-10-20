@@ -283,8 +283,8 @@ func (a *Agent) memory(ctx context.Context) string {
 	return a.memText
 }
 
-// forgetMemory makes the next request read the memory note again.
-func (a *Agent) forgetMemory() {
+// ForgetMemory makes the next request read the memory note again.
+func (a *Agent) ForgetMemory() {
 	a.memMu.Lock()
 	a.memAt = time.Time{}
 	a.memMu.Unlock()

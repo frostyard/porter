@@ -6,6 +6,8 @@ package api
 import (
 	"context"
 	"encoding/json/jsontext"
+
+	"github.com/frostyard/lodge/kit/jsonrpc"
 )
 
 // TurnRole is who a turn is from.
@@ -109,19 +111,16 @@ type Sent struct {
 	Reply int64 `json:"reply"`
 }
 
-// Event is what a subscribed connection receives as an EventMethod
-// notification: a turn written or updated, or whether Porter is working.
-type Event struct {
-	// Type is "turn" or "working".
-	Type string `json:"type"`
-	// Turn is, for "turn", the turn as it now stands.
-	Turn *Turn `json:"turn,omitzero"`
-	// Working is, for "working", whether Porter is working on a reply.
-	Working *bool `json:"working,omitzero"`
+// Working is the data of a "working" event: whether Porter is working on
+// a reply. Events arrive as EventMethod notifications whose params are the
+// kit's envelope (jsonrpc.EventEnvelope): event "turn" with a Turn as
+// data, or event "working" with a Working.
+type Working struct {
+	Working bool `json:"working"`
 }
 
 // EventMethod is the notification method events arrive as.
-const EventMethod = "event"
+const EventMethod = jsonrpc.EventMethod
 
 // ThreadListParams holds the params of thread.list.
 type ThreadListParams struct {

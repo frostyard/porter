@@ -67,15 +67,10 @@ types:
     fields:
       - {name: turn, type: Turn, doc: "The owner's turn."}
       - {name: reply, type: int, doc: "The id of Porter's reply, which events update until it is done."}
-  - name: Event
-    doc: >-
-      What a subscribed connection receives, as JSON-RPC notifications of
-      method "event": a turn written or updated, or whether Porter is
-      working.
+  - name: Working
+    doc: The data of a working event.
     fields:
-      - {name: type, type: string, doc: "turn, or working."}
-      - {name: turn, type: Turn, optional: true, doc: "For turn: the turn as it now stands. A turn with an id already shown replaces it."}
-      - {name: working, type: bool, optional: true, doc: "For working: whether Porter is working on a reply."}
+      - {name: working, type: bool, doc: "Whether Porter is working on a reply."}
 methods:
   - name: list
     doc: A page of the thread, the newest turns before `before`, oldest first.
@@ -116,7 +111,10 @@ methods:
     errors: [notFound, conflict]
   - name: subscribe
     doc: >-
-      Deliver this connection's events from now on: turns written or
-      updated, and whether Porter is working. Answers whether a reply is in
-      progress.
+      Deliver this connection's events from now on, as JSON-RPC
+      notifications of method "event" whose params are lodge's kit
+      envelope, {event, data}: event "turn" with a Turn as data (a turn
+      with an id already shown replaces it), or event "working" with
+      Working as data. Other event names are ignored by clients. Answers
+      whether a reply is in progress.
     result: bool
