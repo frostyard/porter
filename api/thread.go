@@ -78,6 +78,9 @@ type Card struct {
 	Text string `json:"text,omitzero"`
 	// Detail is why it failed.
 	Detail string `json:"detail,omitzero"`
+	// Args is the tool call's arguments as a JSON object, long strings
+	// shortened; porterd replays it to the model as history.
+	Args string `json:"args,omitzero"`
 }
 
 // Turn is one turn of the thread.

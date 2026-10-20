@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"cmp"
 	"context"
 	"encoding/json/v2"
 	"errors"
@@ -111,10 +112,18 @@ func (a *Agent) reply(ctx context.Context, owner api.Turn, reply api.Turn) (api.
 	}
 	calls := 0
 	nudged := false
+	choice := ""
 	for {
-		req := &Request{Model: a.Alias, Messages: msgs, Tools: defs,
+		req := &Request{Model: a.Alias, Messages: msgs, Tools: defs, ToolChoice: choice,
 			TemplateArgs: map[string]any{"enable_thinking": false}}
 		res, err := a.Model.Chat(ctx, inference.Interactive, req)
+		if err != nil && choice != "" {
+			// A provider that can't require a tool call still gets the nudge.
+			a.log().Warn("the model refused tool_choice; asking without it", "err", err)
+			req.ToolChoice = ""
+			res, err = a.Model.Chat(ctx, inference.Interactive, req)
+		}
+		choice = ""
 		if err != nil {
 			return reply, fmt.Errorf("the model: %w", err)
 		}
@@ -135,6 +144,9 @@ func (a *Agent) reply(ctx context.Context, owner api.Turn, reply api.Turn) (api.
 					a.log().Warn("a reply claimed actions no tool took; asking again", "turn", reply.ID, "claims", names)
 					msgs = append(msgs, Message{Role: "assistant", Content: text(answer)},
 						Message{Role: "user", Content: text(nudge(names))})
+					if len(defs) > 0 {
+						choice = "required"
+					}
 					continue
 				}
 				a.log().Warn("a reply still claimed actions no tool took", "turn", reply.ID, "claims", names)
@@ -173,6 +185,7 @@ func (a *Agent) call(ctx context.Context, call ToolCall) (string, api.Card) {
 			return "Your arguments were not valid JSON: " + err.Error(), card
 		}
 	}
+	card.Args = shorten(args)
 	app, tool, _ := strings.Cut(call.Function.Name, "__")
 	card.App, card.Tool = app, tool
 	card.Summary = Summarize(tool, args)
@@ -238,40 +251,94 @@ func (a *Agent) messages(ctx context.Context, owner api.Turn) ([]Message, error)
 		Memory: a.memory(ctx), Location: a.Location}
 	msgs := []Message{{Role: "system", Content: text(p.String())}}
 	for _, t := range past[start:] {
-		msgs = append(msgs, asMessage(t))
+		msgs = append(msgs, asMessages(t)...)
 	}
 	msgs = append(msgs, Message{Role: "user", Content: text(owner.Text)})
 	return msgs, nil
 }
 
-// asMessage gives the model a past turn: an owner's as theirs, Porter's
-// with a line of what it did, a notice as Porter's.
-func asMessage(t api.Turn) Message {
+// asMessages gives the model a past turn: an owner's as theirs, a notice
+// as Porter's, and Porter's as the tool calls it made, their outcomes and
+// its text. The model learns from the history how replies go, so a past
+// reply that claimed an action no tool took is left out rather than shown.
+func asMessages(t api.Turn) []Message {
 	switch t.Role {
 	case api.RoleOwner:
 		s := t.Text
 		if t.Context != nil && t.Context.Kind != "" {
 			s = fmt.Sprintf("[On screen: %s]\n%s", describe(t.Context), s)
 		}
-		return Message{Role: "user", Content: text(s)}
+		return []Message{{Role: "user", Content: text(s)}}
 	case api.RolePorter:
-		s := t.Text
-		var did []string
-		for _, c := range t.Cards {
-			d := c.Summary
-			if c.Status != api.StatusDone {
-				d += " (" + string(c.Status) + ")"
+		var out []Message
+		if len(t.Cards) > 0 {
+			calls := make([]ToolCall, 0, len(t.Cards))
+			for _, c := range t.Cards {
+				tc := ToolCall{ID: c.ID, Type: "function"}
+				tc.Function.Name = c.App + "__" + c.Tool
+				tc.Function.Arguments = cmp.Or(c.Args, "{}")
+				calls = append(calls, tc)
 			}
-			did = append(did, d)
+			out = append(out, Message{Role: "assistant", ToolCalls: calls})
+			for _, c := range t.Cards {
+				out = append(out, Message{Role: "tool", ToolCallID: c.ID, Content: text(outcome(c))})
+			}
 		}
-		if len(did) > 0 {
-			s += "\n[Done in this reply: " + strings.Join(did, "; ") + "]"
-		} else {
-			s += "\n[No tool was called in this reply: nothing in it was done.]"
+		s := t.Text
+		if len(unbacked(s, t.Cards)) > 0 {
+			s = leftOut
 		}
-		return Message{Role: "assistant", Content: text(s)}
+		return append(out, Message{Role: "assistant", Content: text(s)})
 	}
-	return Message{Role: "assistant", Content: text("[Notice] " + t.Text)}
+	return []Message{{Role: "assistant", Content: text("[Notice] " + t.Text)}}
+}
+
+// leftOut stands in the history for a reply that claimed an action no tool
+// took.
+const leftOut = "(This reply is left out: it said something was done, but no tool was called, so nothing was.)"
+
+// outcome is what the history says a past card's tool returned; the full
+// result is not kept.
+func outcome(c api.Card) string {
+	if c.Kind == api.CardCapture {
+		switch c.Status {
+		case api.StatusDone:
+			return "The owner confirmed it; the text was appended to the daily note."
+		case api.StatusCancelled:
+			return "The owner cancelled it; nothing was appended."
+		case api.StatusFailed:
+			return "The append failed: " + c.Detail
+		}
+		return "Shown to the owner to confirm; nothing appended yet."
+	}
+	if c.Status == api.StatusFailed {
+		return "Failed: " + c.Detail
+	}
+	s := "Done: " + c.Summary + "."
+	if c.URL != "" {
+		s += " Its url: " + c.URL
+	}
+	return s + " (The full result is not repeated here.)"
+}
+
+// shorten is a card's arguments for the history: valid JSON, with long
+// strings cut.
+func shorten(args map[string]any) string {
+	if len(args) == 0 {
+		return ""
+	}
+	short := make(map[string]any, len(args))
+	for k, v := range args {
+		if s, ok := v.(string); ok && len(s) > 400 {
+			v = s[:400] + "…"
+		}
+		short[k] = v
+	}
+	b, err := json.Marshal(short)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 // memory returns the owner's memory note, read from notes at most every

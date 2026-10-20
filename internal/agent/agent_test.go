@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -301,16 +302,17 @@ func TestRememberAndMemoryInThePrompt(t *testing.T) {
 	if !strings.Contains(sys, "Iris's group does Saturday dinners") {
 		t.Fatalf("the memory is not in the prompt:\n%s", sys)
 	}
-	// Past turns reach the model, Porter's with what it did.
+	// Past turns reach the model, Porter's as the tool calls it made.
 	msgs := r.model.requests[len(r.model.requests)-1].Messages
-	var did bool
+	var call, result bool
 	for _, m := range msgs {
-		if m.Role == "assistant" && m.Content != nil && strings.Contains(*m.Content, "[Done in this reply: remember") {
-			did = true
+		for _, c := range m.ToolCalls {
+			call = call || c.Function.Name == "porter__remember" && strings.Contains(c.Function.Arguments, "Saturday dinners")
 		}
+		result = result || m.Role == "tool" && m.Content != nil && strings.HasPrefix(*m.Content, "Done: remember")
 	}
-	if !did {
-		t.Error("the earlier reply's action is not in the history")
+	if !call || !result {
+		t.Errorf("the earlier reply's action is not in the history (call %v, result %v)", call, result)
 	}
 }
 
@@ -351,6 +353,10 @@ func TestAClaimWithoutAToolIsSentBack(t *testing.T) {
 	if nudgeMsg.Role != "user" || !strings.Contains(*nudgeMsg.Content, "nothing was done") {
 		t.Fatalf("the nudge = %+v", nudgeMsg)
 	}
+	// The nudge requires a tool call; the request after it doesn't.
+	if r.model.requests[0].ToolChoice != "" || r.model.requests[1].ToolChoice != "required" || r.model.requests[2].ToolChoice != "" {
+		t.Errorf("tool_choice = %q, %q, %q", r.model.requests[0].ToolChoice, r.model.requests[1].ToolChoice, r.model.requests[2].ToolChoice)
+	}
 }
 
 func TestAClaimThatStaysUnbackedIsMarked(t *testing.T) {
@@ -365,14 +371,13 @@ func TestAClaimThatStaysUnbackedIsMarked(t *testing.T) {
 	r.model.answers = []Message{say("ok")}
 	r.ask(t, "and?", nil)
 	last := r.model.requests[len(r.model.requests)-1].Messages
-	var marked bool
 	for _, m := range last {
-		if m.Role == "assistant" && m.Content != nil && strings.Contains(*m.Content, "[No tool was called in this reply") {
-			marked = true
+		if m.Content != nil && strings.Contains(*m.Content, "Draft ready") {
+			t.Errorf("the history repeats an unbacked claim: %q", *m.Content)
 		}
 	}
-	if !marked {
-		t.Error("the history does not mark a reply that called no tool")
+	if !slices.ContainsFunc(last, func(m Message) bool { return m.Content != nil && *m.Content == leftOut }) {
+		t.Error("the history does not leave out a reply that claimed what no tool did")
 	}
 }
 

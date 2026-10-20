@@ -33,6 +33,8 @@ export interface Card {
   text?: string;
   /** Why it failed. */
   detail?: string;
+  /** The tool call's arguments as a JSON object, long strings shortened. */
+  args?: string;
 }
 
 /** One turn of the thread. */

@@ -49,6 +49,9 @@ type Request struct {
 	Model    string    `json:"model"`
 	Messages []Message `json:"messages"`
 	Tools    []ToolDef `json:"tools,omitzero"`
+	// ToolChoice is "required" to make the model call a tool; empty
+	// leaves it to the model.
+	ToolChoice string `json:"tool_choice,omitzero"`
 	// TemplateArgs reach the local model's chat template; enable_thinking
 	// turns its thinking on or off.
 	TemplateArgs map[string]any `json:"chat_template_kwargs,omitzero"`

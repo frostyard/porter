@@ -47,6 +47,7 @@ types:
       - {name: url, type: string, optional: true, doc: "A lodge address for what it touched, opened with lodge.open."}
       - {name: text, type: string, optional: true, doc: "For a capture, the text to append."}
       - {name: detail, type: string, optional: true, doc: "Why it failed."}
+      - {name: args, type: string, optional: true, doc: "The tool call's arguments as a JSON object, long strings shortened; porterd replays it to the model as history."}
   - name: Turn
     doc: One turn of the thread.
     fields:
