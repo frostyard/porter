@@ -31,7 +31,7 @@ YAML frontmatter, then the prompt as the body.
 | `timezone` | string | no | An IANA zone; defaults to Porter's configured zone |
 | `output` | string | no | A vault path template ending in `.md`, under `Porter/` and not under `Porter/Routines/`; placeholders below |
 | `thinking` | bool | no | Whether the model thinks before answering; default `false` |
-| `model` | string | no | A lodge inference alias Porter may use; default `local` |
+| `model` | string | no | A lodge inference alias Porter may use; default Porter's `routine_alias` (configuration), itself `local` unless set |
 | `enabled` | bool | no | Default `true`; `false` keeps the routine without running it |
 
 | Placeholder | Becomes |
