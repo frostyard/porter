@@ -58,8 +58,10 @@ A Go daemon on lodge's kit (`kit/lodgeapp`, `kit/jsonrpc`,
     `mail.draft_reply`).
   - Porter's own tools: `search_thread`, `now`, and `remember`. `remember`
     appends a line to `Porter/Memory.md` through notes, only when the owner
-    asks, and never in a routine. Phase 3 adds `propose`, which puts an
-    action up for approval.
+    asks, and never in a routine. In a routine, a call of a tool that is
+    not unattended doesn't run: it becomes an **approval card** (Phase 3).
+    Its whole arguments are kept, and it runs as the owner's action when
+    they approve it.
   - Tools are marked Read, Draft, Write, Change, Capture or Never.
     - A tool whose name says it sends, posts, forwards or invites is
       Never, and is never offered.
@@ -70,10 +72,21 @@ A Go daemon on lodge's kit (`kit/lodgeapp`, `kit/jsonrpc`,
   read, draft, write in `Porter/`, append to the daily note, or change mail
   and tasks.
 - **The thread store:** SQLite under `/var/lib/frostporter`. It holds
-  turns, tool calls and results, the rolling summary, the full-text index,
-  Activity, and approvals.
-- **The scheduler:** it loads routines from `Porter/Routines/`
-  ([specs/routines.md](../specs/routines.md)) and runs each when it is due.
+  turns with their cards (approvals included), the rolling summary, the
+  full-text index, Activity, and each routine's state.
+- **The scheduler** (`internal/routine`): it loads routines from
+  `Porter/Routines/` ([specs/routines.md](../specs/routines.md)) and runs
+  each when it is due.
+  - It lists the folder every minute, rereading a note whose modified time
+    changed.
+  - It parses each routine strictly. An invalid one is posted once per
+    version and never runs.
+  - It runs each routine through the agent's loop at background priority,
+    with the unattended tools and approvals.
+  - It writes the output note, replacing only its own.
+  - It posts the run's line with its action cards, and records Activity.
+  - SQLite keeps each routine's first-seen and last-run times, for missed
+    runs at start.
 - **The summarizer:** a background job that folds aged turns into the
   rolling summary.
 

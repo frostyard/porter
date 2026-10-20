@@ -43,8 +43,9 @@ with attendees does.
 - **The tokens enforce the ceiling; Porter's policy narrows it.** Notes
   enforces the folder limits
   ([frostnotes ADR-0028](https://github.com/frostyard/frostnotes/blob/main/docs/adr/0028-an-agents-scope-can-limit-writes-to-folders.md)),
-  and mail refuses a send. On top of that, porterd offers a routine only the
-  unattended tools. No prompt can widen either.
+  and mail refuses a send. On top of that, porterd runs only the unattended
+  tools in a routine. Any other tool it offers there only proposes the
+  action, as an approval. No prompt can widen either.
 - **Other people's words are data.**
   - Tool results reach the model wrapped and labelled as content, never as
     instructions.
