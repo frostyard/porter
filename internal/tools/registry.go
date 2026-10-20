@@ -107,6 +107,29 @@ func (r *Registry) Call(ctx context.Context, name string, args map[string]any, u
 	return *t, res, err
 }
 
+// Lookup returns the tool named name as Call would find it, and whether
+// it exists.
+func (r *Registry) Lookup(ctx context.Context, name string) (Tool, bool) {
+	if o, ok := r.own[name]; ok {
+		return o.Tool, true
+	}
+	app, tool, ok := strings.Cut(name, "__")
+	a := r.App(app)
+	if !ok || a == nil {
+		return Tool{}, false
+	}
+	ts, err := a.Tools(ctx)
+	if err != nil {
+		return Tool{}, false
+	}
+	for _, t := range ts {
+		if t.Tool == tool {
+			return t, true
+		}
+	}
+	return Tool{}, false
+}
+
 // Close ends every app's session.
 func (r *Registry) Close() {
 	for _, a := range r.apps {

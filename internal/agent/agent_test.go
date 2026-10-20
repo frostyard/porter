@@ -66,6 +66,20 @@ type fakeNotes struct {
 	memory   atomic.Pointer[string]
 	edits    atomic.Int32
 	created  atomic.Int32
+	changed  atomic.Int32
+}
+
+type thing struct {
+	ID    int64  `json:"id"`
+	Title string `json:"title,omitempty"`
+}
+
+type thingsOut struct {
+	Things []thing `json:"things"`
+}
+
+type thingIn struct {
+	ThingID int64 `json:"thing_id"`
 }
 
 type pathIn struct {
@@ -118,6 +132,13 @@ func newNotes(t *testing.T) *fakeNotes {
 			c := *m + in.Append
 			f.memory.Store(&c)
 			return nil, noteOut{Path: in.Path, URL: "/notes/1/" + in.Path}, nil
+		})
+		mcp.AddTool(s, &mcp.Tool{Name: "find_things", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, thingsOut, error) {
+			return nil, thingsOut{Things: []thing{{ID: 16, Title: "Hiring panel"}}}, nil
+		})
+		mcp.AddTool(s, &mcp.Tool{Name: "change_thing"}, func(_ context.Context, _ *mcp.CallToolRequest, in thingIn) (*mcp.CallToolResult, thing, error) {
+			f.changed.Add(1)
+			return nil, thing{ID: in.ThingID}, nil
 		})
 		mcp.AddTool(s, &mcp.Tool{Name: "append_to_daily_note"}, func(_ context.Context, _ *mcp.CallToolRequest, in pathIn) (*mcp.CallToolResult, noteOut, error) {
 			f.appended.Add(1)
@@ -422,5 +443,28 @@ func TestSearchThreadLeavesOutUnbackedReplies(t *testing.T) {
 	res := last[len(last)-1]
 	if res.Role != "tool" || !strings.Contains(*res.Content, "draft a reply to Victor") || strings.Contains(*res.Content, "Draft ready") {
 		t.Fatalf("search_thread's result = %+v", *res.Content)
+	}
+}
+
+func TestAChangeTakesOnlyIDsAToolReturned(t *testing.T) {
+	r := newRig(t,
+		callTool("notes__change_thing", `{"thing_id":1}`), // a guess
+		callTool("notes__find_things", `{}`),
+		callTool("notes__change_thing", `{"thing_id":16}`),
+		say("Changed the hiring panel."),
+		callTool("notes__change_thing", `{"thing_id":16}`), // used before, and it worked
+		say("Changed it again."),
+		callTool("notes__change_thing", `{"thing_id":7}`), // the owner's own words
+		say("Changed 7."))
+	got := r.ask(t, "change the hiring panel thing", nil)
+	if r.notes.changed.Load() != 1 || len(got.Cards) != 3 || got.Cards[0].Status != api.StatusFailed ||
+		!strings.Contains(got.Cards[0].Detail, "thing_id 1") || got.Cards[2].Status != api.StatusDone {
+		t.Fatalf("changed %d; cards %+v", r.notes.changed.Load(), got.Cards)
+	}
+	if got := r.ask(t, "do it again", nil); r.notes.changed.Load() != 2 || got.Cards[0].Status != api.StatusDone {
+		t.Fatalf("an id from an earlier call that worked: changed %d, cards %+v", r.notes.changed.Load(), got.Cards)
+	}
+	if got := r.ask(t, "now change thing 7", nil); r.notes.changed.Load() != 3 || got.Cards[0].Status != api.StatusDone {
+		t.Fatalf("an id the owner wrote: changed %d, cards %+v", r.notes.changed.Load(), got.Cards)
 	}
 }

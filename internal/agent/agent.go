@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -110,6 +111,7 @@ func (a *Agent) reply(ctx context.Context, owner api.Turn, reply api.Turn) (api.
 	if len(down) > 0 {
 		msgs[0].Content = text(*msgs[0].Content + "\n\nUnavailable right now: " + strings.Join(down, ", ") + ". Say so if the owner asks for them.")
 	}
+	seen := knownIDs(owner, msgs)
 	calls := 0
 	nudged := false
 	choice := ""
@@ -163,7 +165,7 @@ func (a *Agent) reply(ctx context.Context, owner api.Turn, reply api.Turn) (api.
 				out = "Too many tool calls in one reply. Answer with what you have."
 			} else {
 				var card api.Card
-				out, card = a.call(ctx, call)
+				out, card = a.call(ctx, call, seen)
 				reply.Cards = append(reply.Cards, card)
 				a.save(ctx, reply)
 			}
@@ -176,7 +178,7 @@ func (a *Agent) reply(ctx context.Context, owner api.Turn, reply api.Turn) (api.
 }
 
 // call runs one tool call and returns what the model reads, and the card.
-func (a *Agent) call(ctx context.Context, call ToolCall) (string, api.Card) {
+func (a *Agent) call(ctx context.Context, call ToolCall, seen idSet) (string, api.Card) {
 	card := api.Card{ID: a.cardID(), Kind: api.CardTool, Status: api.StatusDone, Tool: call.Function.Name}
 	var args map[string]any
 	if s := strings.TrimSpace(call.Function.Arguments); s != "" && s != "null" {
@@ -196,6 +198,14 @@ func (a *Agent) call(ctx context.Context, call ToolCall) (string, api.Card) {
 		card.Summary = "Append to today's daily note"
 		return "This text is shown to the owner with Confirm and Cancel; nothing is appended until they confirm. Tell them it is waiting for their confirmation.", card
 	}
+	if tl, ok := a.Registry.Lookup(ctx, call.Function.Name); ok && tl.Kind != tools.Read {
+		if bad := seen.unseen(args); len(bad) > 0 {
+			slices.Sort(bad)
+			card.Status, card.Detail = api.StatusFailed, "used an id no tool returned: "+strings.Join(bad, ", ")
+			return "Refused, and nothing was done: " + strings.Join(bad, ", ") + " did not come from a tool result. " +
+				"Find it with a search or list tool first, then use exactly the id that tool returns.", card
+		}
+	}
 	tl, res, err := a.Registry.Call(ctx, call.Function.Name, args, false)
 	if tl.App != "" {
 		card.App = tl.App
@@ -209,6 +219,7 @@ func (a *Agent) call(ctx context.Context, call ToolCall) (string, api.Card) {
 		return "The tool refused: " + res.Text, card
 	}
 	card.URL = res.URL
+	seen.addJSON(res.Text)
 	return wrap(card.App, card.Tool, res.Text), card
 }
 
