@@ -337,3 +337,70 @@ func TestCompactFoldsOldTurns(t *testing.T) {
 		t.Fatalf("a second compact called the model again: %v, %d requests", err, len(r.model.requests))
 	}
 }
+
+func TestAClaimWithoutAToolIsSentBack(t *testing.T) {
+	r := newRig(t,
+		say("Noted. I'll remember that Iris's group does Saturday dinners."), // claims, calls nothing
+		callTool("porter__remember", `{"text":"Iris's group does Saturday dinners"}`),
+		say("Noted."))
+	got := r.ask(t, "remember that Iris's group does Saturday dinners", nil)
+	if r.notes.created.Load() != 1 || got.Text != "Noted." || len(got.Cards) != 1 || got.Cards[0].Tool != "remember" {
+		t.Fatalf("after the nudge: created %d, reply %+v", r.notes.created.Load(), got)
+	}
+	nudgeMsg := r.model.requests[1].Messages[len(r.model.requests[1].Messages)-1]
+	if nudgeMsg.Role != "user" || !strings.Contains(*nudgeMsg.Content, "nothing was done") {
+		t.Fatalf("the nudge = %+v", nudgeMsg)
+	}
+}
+
+func TestAClaimThatStaysUnbackedIsMarked(t *testing.T) {
+	r := newRig(t,
+		say("Draft ready for Victor, waiting in Drafts."),
+		say("New draft created for Victor."))
+	got := r.ask(t, "draft a reply to Victor", nil)
+	if !strings.Contains(got.Text, "called no tool to do it, so nothing was done") || len(r.model.requests) != 2 {
+		t.Fatalf("an unbacked claim: %d requests, text %q", len(r.model.requests), got.Text)
+	}
+	// The next request tells the model that reply did nothing.
+	r.model.answers = []Message{say("ok")}
+	r.ask(t, "and?", nil)
+	last := r.model.requests[len(r.model.requests)-1].Messages
+	var marked bool
+	for _, m := range last {
+		if m.Role == "assistant" && m.Content != nil && strings.Contains(*m.Content, "[No tool was called in this reply") {
+			marked = true
+		}
+	}
+	if !marked {
+		t.Error("the history does not mark a reply that called no tool")
+	}
+}
+
+func TestClaimsMatchTheirCards(t *testing.T) {
+	draft := api.Card{Tool: "draft_reply", Status: api.StatusDone}
+	failedDraft := api.Card{Tool: "draft_reply", Status: api.StatusFailed}
+	capture := api.Card{Kind: api.CardCapture, Status: api.StatusPending}
+	for _, c := range []struct {
+		text  string
+		cards []api.Card
+		want  string
+	}{
+		{"Draft ready for Lena, waiting in Drafts.", nil, "draft"},
+		{"New draft created — Re: Hiring panel.", nil, "draft"},
+		{"I created a fresh draft for you.", nil, "draft"},
+		{"Draft ready for Lena.", []api.Card{draft}, ""},
+		{"Draft ready for Lena.", []api.Card{failedDraft}, "draft"},
+		{"Captured — the summary is staged in today's note.", nil, "capture"},
+		{"Captured; confirm it below.", []api.Card{capture}, ""},
+		{"I'll remember that.", nil, "remember"},
+		{"I created a task to call Iris on Friday.", nil, "task"},
+		{"Friday 2pm is clear on your calendar.", nil, ""},
+		{"Want me to draft a reply?", nil, ""},
+		{"I can't edit drafts, only create them.", nil, ""},
+	} {
+		got := strings.Join(unbacked(c.text, c.cards), ",")
+		if got != c.want {
+			t.Errorf("unbacked(%q) = %q, want %q", c.text, got, c.want)
+		}
+	}
+}

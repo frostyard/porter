@@ -110,6 +110,7 @@ func (a *Agent) reply(ctx context.Context, owner api.Turn, reply api.Turn) (api.
 		msgs[0].Content = text(*msgs[0].Content + "\n\nUnavailable right now: " + strings.Join(down, ", ") + ". Say so if the owner asks for them.")
 	}
 	calls := 0
+	nudged := false
 	for {
 		req := &Request{Model: a.Alias, Messages: msgs, Tools: defs,
 			TemplateArgs: map[string]any{"enable_thinking": false}}
@@ -122,9 +123,24 @@ func (a *Agent) reply(ctx context.Context, owner api.Turn, reply api.Turn) (api.
 		}
 		m := res.Choices[0].Message
 		if len(m.ToolCalls) == 0 {
+			answer := ""
 			if m.Content != nil {
-				reply.Text = strings.TrimSpace(*m.Content)
+				answer = strings.TrimSpace(*m.Content)
 			}
+			// Never let the reply claim an action no tool took: send the
+			// model back once, then say so on the reply.
+			if names := unbacked(answer, reply.Cards); len(names) > 0 {
+				if !nudged {
+					nudged = true
+					a.log().Warn("a reply claimed actions no tool took; asking again", "turn", reply.ID, "claims", names)
+					msgs = append(msgs, Message{Role: "assistant", Content: text(answer)},
+						Message{Role: "user", Content: text(nudge(names))})
+					continue
+				}
+				a.log().Warn("a reply still claimed actions no tool took", "turn", reply.ID, "claims", names)
+				answer += unbackedNote
+			}
+			reply.Text = answer
 			return reply, nil
 		}
 		msgs = append(msgs, Message{Role: "assistant", Content: m.Content, ToolCalls: m.ToolCalls})
@@ -250,6 +266,8 @@ func asMessage(t api.Turn) Message {
 		}
 		if len(did) > 0 {
 			s += "\n[Done in this reply: " + strings.Join(did, "; ") + "]"
+		} else {
+			s += "\n[No tool was called in this reply: nothing in it was done.]"
 		}
 		return Message{Role: "assistant", Content: text(s)}
 	}
