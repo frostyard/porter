@@ -167,8 +167,8 @@ importers:
   .:
     dependencies:
       '@frostyard/lodge-client':
-        specifier: github:frostyard/lodge#bab1ed748240771e7396b3431559a356c1c22d17&path:client
-        version: https://codeload.github.com/frostyard/lodge/tar.gz/bab1ed748240771e7396b3431559a356c1c22d17#path:client
+        specifier: github:frostyard/lodge#client/v0.2.0&path:client
+        version: https://codeload.github.com/frostyard/lodge/tar.gz/c31c333fee4828d00228415198f7b7b1008f5950#path:client
       marked:
         specifier: 18.0.14
         version: 18.0.14
@@ -188,9 +188,9 @@ importers:
 
 packages:
 
-  '@frostyard/lodge-client@https://codeload.github.com/frostyard/lodge/tar.gz/bab1ed748240771e7396b3431559a356c1c22d17#path:client':
-    resolution: {gitHosted: true, integrity: sha512-zIj4eT7ZKnvIS1wHR6GEHg5c1ckHz3KKEwYQgf3dGMdTPgYe2y9rfMeUQc1oFIHAWrcMsPOuwzVkGI2QyiE4lQ==, path: client, tarball: https://codeload.github.com/frostyard/lodge/tar.gz/bab1ed748240771e7396b3431559a356c1c22d17}
-    version: 0.1.0
+  '@frostyard/lodge-client@https://codeload.github.com/frostyard/lodge/tar.gz/c31c333fee4828d00228415198f7b7b1008f5950#path:client':
+    resolution: {gitHosted: true, integrity: sha512-s/Ip6AQkg53SJ3I0cr+ep7IHF83jv36WcgNw22/nkRQeoqQektAQAND4+ekdb0VQ9qspqxpsO70DMkjop975aQ==, path: client, tarball: https://codeload.github.com/frostyard/lodge/tar.gz/c31c333fee4828d00228415198f7b7b1008f5950}
+    version: 0.2.0
 
   '@jridgewell/resolve-uri@3.1.2':
     resolution: {integrity: sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw==}
@@ -745,7 +745,7 @@ packages:
 
 snapshots:
 
-  '@frostyard/lodge-client@https://codeload.github.com/frostyard/lodge/tar.gz/bab1ed748240771e7396b3431559a356c1c22d17#path:client': {}
+  '@frostyard/lodge-client@https://codeload.github.com/frostyard/lodge/tar.gz/c31c333fee4828d00228415198f7b7b1008f5950#path:client': {}
 
   '@jridgewell/resolve-uri@3.1.2': {}
 

@@ -11,7 +11,7 @@
     "check": "tsc --noEmit && vitest run"
   },
   "dependencies": {
-    "@frostyard/lodge-client": "github:frostyard/lodge#bab1ed748240771e7396b3431559a356c1c22d17&path:client",
+    "@frostyard/lodge-client": "github:frostyard/lodge#client/v0.2.0&path:client",
     "marked": "18.0.14"
   },
   "devDependencies": {

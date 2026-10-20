@@ -3,7 +3,7 @@ module github.com/frostyard/porter
 go 1.27.0
 
 require (
-	github.com/frostyard/lodge/kit v0.1.1-0.20261019230359-bab1ed748240
+	github.com/frostyard/lodge/kit v0.2.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	modernc.org/sqlite v1.60.1
 )
