@@ -89,6 +89,15 @@ A Go daemon on lodge's kit (`kit/lodgeapp`, `kit/jsonrpc`,
     runs at start.
 - **The summarizer:** a background job that folds aged turns into the
   rolling summary.
+- **Links in the vault** (`internal/links`): the thread links by lodge
+  address (`/notes/2/Plan.md`, `/mail/message/…`), which it opens through
+  lodge. In a note, a rooted path is a vault path: a click there made a
+  note named `mail/message/…`. So text porterd writes into the vault
+  rewrites those links. This covers routine outputs, notes Porter creates
+  or edits, captures, approvals' appends and memory.
+  - A link to a note becomes a wikilink by its vault path, which notes and
+    Obsidian both resolve.
+  - Any other lodge address becomes an absolute URL under `lodge_url`.
 
 ### A request to the model
 
@@ -220,8 +229,8 @@ the same id, and event `working`.
 ## Operational notes
 
 - **Configuration:** `/etc/porter/porter.json` holds the owner's name, the
-  time zone, the aliases for chat and for routines, and the apps Porter
-  reaches. Unknown keys are refused. Each app's token is kept in
+  time zone, the aliases for chat and for routines, the apps Porter
+  reaches, and `lodge_url`, lodge's https origin. Unknown keys are refused. Each app's token is kept in
   `/var/lib/frostporter/tokens/<app>` (0600). It is set with
   `porterd token set <app>` from stdin, never on the command line, and
   issued with `lodgectl token issue … --agent frostporter`, so it works only

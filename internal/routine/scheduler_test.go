@@ -178,6 +178,10 @@ func (f *fakeAgent) Post(ctx context.Context, t api.Turn) (api.Turn, error) {
 	return f.store.Add(ctx, t)
 }
 
+func (f *fakeAgent) ForVault(text string) string {
+	return strings.ReplaceAll(text, "](/mail/", "](https://lodge.test/mail/")
+}
+
 func (f *fakeAgent) ran() []agent.RunSpec {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -249,7 +253,7 @@ func TestTheBriefRunsAtItsTimeAndWritesItsNote(t *testing.T) {
 	r := newRig(t)
 	r.v.put("Porter/Routines/Morning brief.md", brief)
 	r.v.put("Porter/Routines/Old/Ignored.md", brief) // not directly in the folder
-	r.a.script(answer("# Monday\n\nThree meetings.", api.Card{ID: "c1", Kind: api.CardTool, Tool: "read_note", Status: api.StatusDone},
+	r.a.script(answer("# Monday\n\nThree meetings. [Re: Plan](/mail/message/9)", api.Card{ID: "c1", Kind: api.CardTool, Tool: "read_note", Status: api.StatusDone},
 		api.Card{ID: "c2", Kind: api.CardApproval, App: "mail", Tool: "set_flags", Status: api.StatusPending}))
 	r.tick(t, "2026-10-19 06:29")
 	if len(r.a.ran()) != 0 {
@@ -262,7 +266,8 @@ func TestTheBriefRunsAtItsTimeAndWritesItsNote(t *testing.T) {
 		t.Fatalf("runs = %+v", specs)
 	}
 	out, ok := r.v.get("Porter/Briefs/2026-10-19.md")
-	if !ok || !strings.HasPrefix(out, "---\nroutine: Morning brief\nrun: \"2026-10-19T06:30:00-04:00\"\n---\n# Monday") {
+	if !ok || !strings.HasPrefix(out, "---\nroutine: Morning brief\nrun: \"2026-10-19T06:30:00-04:00\"\n---\n# Monday") ||
+		!strings.Contains(out, "[Re: Plan](https://lodge.test/mail/message/9)") {
 		t.Fatalf("the output note:\n%s\nthe line: %s", out, r.lastTurn(t).Text)
 	}
 	turn := r.lastTurn(t)

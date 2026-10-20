@@ -32,6 +32,8 @@ type Notes interface {
 type Agent interface {
 	Run(ctx context.Context, spec agent.RunSpec) (string, []api.Card, error)
 	Acted(ctx context.Context, c api.Card) bool
+	// ForVault rewrites the links in text bound for a note.
+	ForVault(text string) string
 	Post(ctx context.Context, t api.Turn) (api.Turn, error)
 }
 
@@ -324,7 +326,7 @@ func (s *Scheduler) write(ctx context.Context, r Routine, p string, scheduled ti
 	if err != nil {
 		return "", "", err
 	}
-	content := "---\n" + string(head) + "---\n" + strings.TrimSpace(answer) + "\n"
+	content := "---\n" + string(head) + "---\n" + strings.TrimSpace(s.Agent.ForVault(answer)) + "\n"
 	for n := 1; n <= 20; n++ {
 		at := p
 		if n > 1 {

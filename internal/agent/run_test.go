@@ -98,3 +98,23 @@ func TestARoutineFailsPastTheToolLimit(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+// Text Porter writes into the vault links notes as wikilinks and the rest
+// of lodge by absolute URL, so a note can follow its links.
+func TestTextForTheVaultLinksSoNotesCanFollow(t *testing.T) {
+	r := newRig(t,
+		callTool("notes__append_to_daily_note", `{"text":"- [ ] reply to [Re: Plan](/mail/message/9), see [Plan](/notes/1/Projects/Plan.md)"}`),
+		say("It waits for your confirmation."),
+		callTool("porter__remember", `{"text":"Iris's thread is [Dinner](/mail/message/4)"}`),
+		say("Noted."))
+	r.agent.LodgeURL = "https://lodge.test"
+	got := r.ask(t, "capture: reply to the plan thread", nil)
+	want := "- [ ] reply to [Re: Plan](https://lodge.test/mail/message/9), see [[Projects/Plan]]"
+	if len(got.Cards) != 1 || got.Cards[0].Text != want {
+		t.Fatalf("the capture card = %+v", got.Cards)
+	}
+	r.ask(t, "remember Iris's dinner thread", nil)
+	if m := r.notes.memory.Load(); m == nil || !strings.Contains(*m, "[Dinner](https://lodge.test/mail/message/4)") {
+		t.Fatalf("the memory note = %v", m)
+	}
+}

@@ -106,6 +106,7 @@ func (a *Agent) Confirm(ctx context.Context, cardID, edited string) (api.Turn, e
 		return api.Turn{}, err
 	}
 	c := &t.Cards[i]
+	edited = a.ForVault(edited)
 	if c.Kind == api.CardApproval {
 		return a.approve(ctx, t, i, edited)
 	}

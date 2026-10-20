@@ -124,7 +124,10 @@ func run(ctx context.Context, args []string) error {
 	ai := inference.New(env, ID)
 	defer ai.Close()
 	ag := &agent.Agent{Store: store, Model: agent.Lodge{C: ai}, Alias: cfg.ChatAlias, Owner: cfg.Owner,
-		Location: loc, Log: log}
+		LodgeURL: cfg.LodgeURL, Location: loc, Log: log}
+	if cfg.LodgeURL == "" {
+		log.Warn("no lodge_url in the configuration: links to mail in notes Porter writes cannot be followed")
+	}
 	var notes *tools.App
 	for _, a := range apps {
 		if a.ID == "notes" {

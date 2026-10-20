@@ -95,7 +95,9 @@ Link every item.
    porterd writes it to that note, with frontmatter `routine: <name>` and
    `run: <the run's scheduled time, RFC 3339 in the routine's zone>`.
    Without `output`, the answer is the thread line itself, after the
-   routine's name.
+   routine's name. In the output note, a link to a note is a wikilink, and
+   any other lodge address is an absolute URL under Porter's `lodge_url`,
+   so the note's links work in notes and in Obsidian.
 4. **Reporting:** each run posts one line in the thread, linking to the
    output. Its cards are what the run did and proposes: drafts, notes
    written, and approvals. It also records an Activity entry.

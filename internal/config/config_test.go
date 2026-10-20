@@ -64,3 +64,25 @@ func TestTokens(t *testing.T) {
 		t.Fatalf("token = %q", tok)
 	}
 }
+
+func TestLodgeURLMustBeAnHTTPSOrigin(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://lodge.example.ts.net":   "https://lodge.example.ts.net",
+		"https://lodge.example.ts.net/":  "https://lodge.example.ts.net",
+		"http://lodge.example.ts.net":    "",
+		"https://lodge.example.ts.net/x": "",
+		"lodge.example.ts.net":           "",
+	} {
+		p := filepath.Join(t.TempDir(), "porter.json")
+		if err := os.WriteFile(p, []byte(`{"lodge_url":"`+in+`"}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		c, err := Load(p)
+		switch {
+		case want == "" && err == nil:
+			t.Errorf("%q was accepted", in)
+		case want != "" && (err != nil || c.LodgeURL != want):
+			t.Errorf("%q: %q, %v", in, c.LodgeURL, err)
+		}
+	}
+}

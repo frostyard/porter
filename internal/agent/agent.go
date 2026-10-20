@@ -15,6 +15,7 @@ import (
 	"github.com/frostyard/lodge/kit/inference"
 
 	"github.com/frostyard/porter/api"
+	"github.com/frostyard/porter/internal/links"
 	"github.com/frostyard/porter/internal/thread"
 	"github.com/frostyard/porter/internal/tools"
 )
@@ -37,7 +38,9 @@ type Agent struct {
 	// Alias is the inference alias chat uses, such as local.
 	Alias string
 	// Owner is the owner's name, for the prompt.
-	Owner    string
+	Owner string
+	// LodgeURL is lodge's https origin, for links written into notes.
+	LodgeURL string
 	Location *time.Location
 	// Emit receives every turn as it is written or updated.
 	Emit func(api.Turn)
@@ -219,6 +222,27 @@ func toolDefs(ts []tools.Tool, prefix string) []ToolDef {
 	return defs
 }
 
+// vaultText are the arguments of a tool that carry text into the vault.
+var vaultText = map[string][]string{
+	"notes__create_note":          {"content"},
+	"notes__edit_note":            {"new_text", "append", "prepend"},
+	"notes__append_to_daily_note": {"text"},
+	"porter__remember":            {"text"},
+}
+
+// forVault rewrites, in place, the links in text a tool call writes into
+// the vault, so a note can follow them (internal/links).
+func (a *Agent) forVault(app, tool string, args map[string]any) {
+	for _, k := range vaultText[app+"__"+tool] {
+		if s, ok := args[k].(string); ok {
+			args[k] = links.ForVault(s, a.LodgeURL)
+		}
+	}
+}
+
+// ForVault rewrites the links in text bound for a note.
+func (a *Agent) ForVault(text string) string { return links.ForVault(text, a.LodgeURL) }
+
 // maxApprovalArgs bounds the arguments an approval card keeps whole.
 const maxApprovalArgs = 16 << 10
 
@@ -233,8 +257,9 @@ func (a *Agent) call(ctx context.Context, call ToolCall, seen idSet, unattended 
 			return "Your arguments were not valid JSON: " + err.Error(), card
 		}
 	}
-	card.Args = shorten(args)
 	app, tool, _ := strings.Cut(call.Function.Name, "__")
+	a.forVault(app, tool, args)
+	card.Args = shorten(args)
 	card.App, card.Tool = app, tool
 	card.Summary = Summarize(tool, args)
 	capture := app == "notes" && tool == "append_to_daily_note"
