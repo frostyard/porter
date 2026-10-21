@@ -57,6 +57,10 @@ Write my morning brief for today. Keep it to one phone screen, in this order:
 3. **Due:** tasks due today or overdue, and unchecked items in the last
    three days' daily notes.
 4. **Yesterday:** two or three lines on what I wrote and what I sent.
+5. **Reading:** new articles in my feeds since your last run, grouped by
+   source: at most 3 per source and 10 in all, newest first, each one line
+   with a link and a short summary. Then one line with how many more wait
+   unread. Skip the section when nothing is new.
 
 Draft no replies. End with one line offering to draft replies to the
 "Waiting on me" threads.
@@ -84,7 +88,12 @@ Link every item.
 1. **When:** porterd starts a run when the schedule matches the current
    minute in the routine's zone.
 2. **Tools and rights:** the run gets the system prompt, `Porter/Memory.md`
-   and the routine's body, but not the thread. It runs only the unattended
+   and the routine's body, but not the thread. The system prompt also gives
+   the scheduled time of the routine's last successful run (RFC 3339, in the
+   owner's zone), or says there is none, so that "since your last run" has a
+   meaning: the model passes that time as a tool's `since`, and with none
+   recorded it means the last 24 hours. A failed run does not move that
+   time. porterd keeps it in SQLite. It runs only the unattended
    tools of [ADR-0004](../adr/0004-porter-drafts-and-the-owner-sends.md):
    reads, mail drafts, and notes under `Porter/` outside `Porter/Routines/`.
    The other tools are offered only to propose. A call of one, such as
@@ -131,5 +140,5 @@ Link every item.
 
 ## References
 
-- Rationale: [ADR-0005](../adr/0005-memory-and-routines-live-in-the-vault.md), [ADR-0004](../adr/0004-porter-drafts-and-the-owner-sends.md)
+- Rationale: [ADR-0005](../adr/0005-memory-and-routines-live-in-the-vault.md), [ADR-0004](../adr/0004-porter-drafts-and-the-owner-sends.md), [ADR-0007](../adr/0007-porter-reads-frostread-read-only.md) (the brief's Reading section)
 - Context: [design/overview.md](../design/overview.md)

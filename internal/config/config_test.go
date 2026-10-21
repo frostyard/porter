@@ -9,7 +9,7 @@ import (
 
 func TestDefaultsAndValidation(t *testing.T) {
 	c, err := Load(filepath.Join(t.TempDir(), "missing.json"))
-	if err != nil || c.ChatAlias != "local" || c.RoutineAlias != "local" || strings.Join(c.Apps, ",") != "notes,mail" {
+	if err != nil || c.ChatAlias != "local" || c.RoutineAlias != "local" || strings.Join(c.Apps, ",") != "notes,mail,read" {
 		t.Fatalf("defaults = %+v, %v", c, err)
 	}
 	dir := t.TempDir()

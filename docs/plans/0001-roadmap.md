@@ -1,7 +1,8 @@
 # Plan: Roadmap
 
 What Porter delivers, in order: what it needs from lodge and the apps, then
-chat in the companion, then routines, then the GitHub manager. It is
+chat in the companion, then routines, then reading from frostread, then the
+GitHub manager. It is
 lodge's roadmap Phase 5 (the assistant) carried into a build, and it waits
 on that phase's lodge work.
 
@@ -12,6 +13,9 @@ Status (2026-10-21):
 - Phase 1 is built and checked on lodge's host (2026-10-19).
 - Phases 2 and 3 are built and merged to `main` (porter#1 and porter#2,
   2026-10-21). Their done-when checks are still open.
+- Phase 5 (reading from frostread) is built, before Phase 4, in porter's
+  `feat/reading` pull request ([ADR-0007](../adr/0007-porter-reads-frostread-read-only.md),
+  Proposed 2026-10-21). Its done-when check is open.
 - `main` at `73eead0` is deployed on lodge's host (2026-10-21). See
   [Deployments](#deployments).
 
@@ -132,6 +136,29 @@ What remains is the done-when evidence: a week of briefs, and a review.
 - **Done when:** "what's waiting on me on GitHub?" answers from the
   manager, and a drafted review waits there for the owner to post.
 
+## Phase 5 — Reading from frostread
+
+Built before Phase 4, since frostread exists and the GitHub manager does
+not ([ADR-0007](../adr/0007-porter-reads-frostread-read-only.md)).
+
+- **The token:** one `read`-scope token, issued with
+  `lodgectl token issue porter-read --app read --scope read --agent
+  frostporter` and set with `porterd token set read`. Brian approved it on
+  2026-10-21. `read` joins the default apps.
+- **The tools:** `list_sources`, `list_unread`, `search` and `read_item`,
+  by Porter's own allow-list as well as the token's scope. `save_url`,
+  `mark_read` and `star` are never offered. A `read_item` card links
+  `/read/item/<id>`.
+- **The brief's Reading section:** new items since the last brief, by
+  source, capped and summarised
+  ([specs/routines.md](../specs/routines.md)).
+- **The last-run time:** porterd keeps the scheduled time of each routine's
+  last successful run, and the run's system prompt gives it, so "since the
+  last brief" has a meaning.
+- **Done when,** on lodge's host: a brief run by hand lists frostread items
+  by source with links to `/read/item/<id>`, and chat answers "what is new
+  in my feeds?" from Read.
+
 ## Later / ideas
 
 - Notifications while lodge is closed. That needs lodge to decide on Web
@@ -150,5 +177,5 @@ What remains is the done-when evidence: a week of briefs, and a review.
 ## References
 
 - Implements: [design/overview.md](../design/overview.md), [specs/routines.md](../specs/routines.md)
-- Decisions: [ADR-0003](../adr/0003-porter-is-a-lodge-app-that-owns-no-data.md), [ADR-0004](../adr/0004-porter-drafts-and-the-owner-sends.md), [ADR-0005](../adr/0005-memory-and-routines-live-in-the-vault.md), [ADR-0006](../adr/0006-one-continuous-thread.md)
+- Decisions: [ADR-0003](../adr/0003-porter-is-a-lodge-app-that-owns-no-data.md), [ADR-0004](../adr/0004-porter-drafts-and-the-owner-sends.md), [ADR-0005](../adr/0005-memory-and-routines-live-in-the-vault.md), [ADR-0006](../adr/0006-one-continuous-thread.md), [ADR-0007](../adr/0007-porter-reads-frostread-read-only.md)
 - Related: lodge's [roadmap](https://github.com/frostyard/lodge/blob/main/docs/plans/0001-roadmap.md), Phase 5

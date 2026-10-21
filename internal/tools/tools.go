@@ -171,7 +171,7 @@ func (a *App) Call(ctx context.Context, tool string, args map[string]any) (Resul
 		if err != nil {
 			return err
 		}
-		out = result(res)
+		out = result(a.ID, tool, res)
 		return nil
 	})
 	return out, err
@@ -195,18 +195,13 @@ func (a *App) retry(ctx context.Context, fn func(*mcp.ClientSession) error) erro
 	return fn(s)
 }
 
-func result(res *mcp.CallToolResult) Result {
+func result(app, tool string, res *mcp.CallToolResult) Result {
 	var r Result
 	r.Error = res.IsError
 	if res.StructuredContent != nil {
 		if b, err := json.Marshal(res.StructuredContent); err == nil {
 			r.Text = string(b)
-			var top struct {
-				URL string `json:"url"`
-			}
-			if json.Unmarshal(b, &top) == nil {
-				r.URL = top.URL
-			}
+			r.URL = resultURL(app, tool, b)
 		}
 	}
 	if r.Text == "" || r.Error {

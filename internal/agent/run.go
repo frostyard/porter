@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/frostyard/lodge/kit/inference"
 
@@ -23,6 +24,9 @@ type RunSpec struct {
 	// Output is the note the answer is written to; "" when the answer is
 	// the thread line itself.
 	Output string
+	// LastRun is the scheduled time of the routine's last successful run;
+	// zero when there is none.
+	LastRun time.Time
 }
 
 // proposeNote starts the description of each tool a routine may only

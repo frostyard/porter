@@ -496,3 +496,24 @@ func TestUnavailableKnowsTheProviderIsDown(t *testing.T) {
 		t.Error("unavailable misjudged an error")
 	}
 }
+
+// A run gets the scheduled time of the last run that succeeded, not of a
+// failed one after it.
+func TestARunGetsTheTimeOfTheLastSuccess(t *testing.T) {
+	r := newRig(t)
+	r.v.put("Porter/Routines/Morning brief.md", brief)
+	r.a.script(answer("Monday."),
+		func(context.Context) (string, []api.Card, error) { return "", nil, agent.ErrTooManyCalls },
+		answer("Wednesday."))
+	r.tick(t, "2026-10-19 06:30")
+	r.tick(t, "2026-10-20 06:30")
+	r.tick(t, "2026-10-21 06:30")
+	specs := r.a.ran()
+	if len(specs) != 3 {
+		t.Fatalf("runs = %+v", specs)
+	}
+	monday := time.Date(2026, 10, 19, 6, 30, 0, 0, r.ny)
+	if !specs[0].LastRun.IsZero() || !specs[1].LastRun.Equal(monday) || !specs[2].LastRun.Equal(monday) {
+		t.Errorf("last runs = %v, %v, %v; want zero, %v, %v", specs[0].LastRun, specs[1].LastRun, specs[2].LastRun, monday, monday)
+	}
+}

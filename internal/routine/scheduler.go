@@ -225,7 +225,14 @@ func (s *Scheduler) run(ctx context.Context, r Routine, scheduled time.Time) {
 	rctx, cancel := context.WithTimeout(ctx, RunTimeout)
 	defer cancel()
 	output := r.OutputPath(scheduled)
-	answer, cards, err := s.Agent.Run(rctx, agent.RunSpec{Name: r.Name, Prompt: r.Prompt, Alias: r.Model, Thinking: r.Thinking, Output: output})
+	// The last success is for the prompt only: a store error must not stop the run.
+	var lastRun time.Time
+	if st, err := s.Store.SeeRoutine(ctx, r.Name, s.now()); err != nil {
+		s.log().Error("read a routine's last success", "routine", r.Name, "err", err)
+	} else {
+		lastRun = st.LastSuccess
+	}
+	answer, cards, err := s.Agent.Run(rctx, agent.RunSpec{Name: r.Name, Prompt: r.Prompt, Alias: r.Model, Thinking: r.Thinking, Output: output, LastRun: lastRun})
 	if err != nil && unavailable(err) && ctx.Err() == nil {
 		if now := s.now(); now.Add(RetryEvery).Sub(scheduled) <= RetryFor {
 			s.log().Warn("the model is unavailable; the routine will retry", "routine", r.Name, "in", RetryEvery, "err", err)
