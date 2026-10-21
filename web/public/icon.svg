@@ -1,1 +1,51 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12h8M12 8v8"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <title>Porter</title>
+  <desc>A snow-crystal-marked concierge service bell with an ice-blue faceted dome, a push button and a broad base on a chamfered midnight-blue tile.</desc>
+  <!-- Frostyard core .agents/skills/frostyard-design/tokens/colors.css:
+       ink #06111d, deep #081b2d, panel #0d263b, ice #aee9ff,
+       sky #47b8ef, blue #168bd0, text-body #edf8ff, line-strong #2c6380.
+       Gradient stops match the siblings' tile, paper and primary gradients. -->
+  <defs>
+    <linearGradient id="tile" x1="32" y1="32" x2="480" y2="480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0d2d45"/>
+      <stop offset="1" stop-color="#071827"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="160" y1="168" x2="336" y2="344" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#edf8ff"/>
+      <stop offset="1" stop-color="#aee9ff"/>
+    </linearGradient>
+    <linearGradient id="base" x1="88" y1="368" x2="424" y2="416" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5ac9f7"/>
+      <stop offset="1" stop-color="#1584ca"/>
+    </linearGradient>
+    <path id="flake-arm" d="M256 214V262 M243 226L256 239L269 226"/>
+  </defs>
+  <!-- The same cut-corner frame, padding and hairline as Frostmail. -->
+  <path d="M64 16H448L496 64V448L448 496H64L16 448V64Z" fill="#06111d"/>
+  <path d="M66 20H446L492 66V446L446 492H66L20 446V66Z" fill="url(#tile)" stroke="#2c6380" stroke-width="2"/>
+  <!-- A wide push button and a visible stem identify a service bell. -->
+  <path d="M244 128H268V180H244Z" fill="#47b8ef"/>
+  <path d="M220 104H292L308 120V136H204V120Z" fill="#aee9ff"/>
+  <path d="M220 104H292L308 120H204Z" fill="#edf8ff"/>
+  <!-- Broad facets form the dome without curves or fine outlines. -->
+  <path d="M112 328V296L136 236L180 192L228 168H284L332 192L376 236L400 296V328Z" fill="url(#paper)"/>
+  <path d="M228 168L180 192L136 236L112 296V328H168L192 236Z" fill="#aee9ff"/>
+  <path d="M284 168L332 192L376 236L400 296V328H336L312 236Z" fill="#47b8ef"/>
+  <path d="M376 236L400 296V328H368Z" fill="#168bd0"/>
+  <!-- The family's sixfold snow crystal marks the pale face. -->
+  <g stroke="#0d263b" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter">
+    <use href="#flake-arm"/>
+    <use href="#flake-arm" transform="rotate(60 256 262)"/>
+    <use href="#flake-arm" transform="rotate(120 256 262)"/>
+    <use href="#flake-arm" transform="rotate(180 256 262)"/>
+    <use href="#flake-arm" transform="rotate(240 256 262)"/>
+    <use href="#flake-arm" transform="rotate(300 256 262)"/>
+  </g>
+  <!-- A bright rim and a dark gap keep the bell separate from its base. -->
+  <path d="M104 328H408V348H104Z" fill="#aee9ff"/>
+  <path d="M336 328H408V348H336Z" fill="#47b8ef"/>
+  <path d="M104 328H408" stroke="#081b2d" stroke-width="8"/>
+  <path d="M104 368H408L424 392V416H88V392Z" fill="url(#base)"/>
+  <path d="M104 368H408L424 392H88Z" fill="#aee9ff"/>
+  <path d="M384 392H424V416H384Z" fill="#168bd0"/>
+</svg>
