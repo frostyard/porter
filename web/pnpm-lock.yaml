@@ -169,6 +169,9 @@ importers:
       '@frostyard/lodge-client':
         specifier: github:frostyard/lodge#client/v0.2.0&path:client
         version: https://codeload.github.com/frostyard/lodge/tar.gz/c31c333fee4828d00228415198f7b7b1008f5950#path:client
+      '@frostyard/lodge-ui':
+        specifier: github:frostyard/lodge#6975d3b8967af154a08b8d87d3cd4beee12e2dea&path:ui
+        version: https://codeload.github.com/frostyard/lodge/tar.gz/6975d3b8967af154a08b8d87d3cd4beee12e2dea#path:ui
       marked:
         specifier: 18.0.14
         version: 18.0.14
@@ -188,9 +191,24 @@ importers:
 
 packages:
 
+  '@fontsource-variable/inter@5.3.0':
+    resolution: {integrity: sha512-OupL48va4JNofb97w6NYeF9S7W/kHNKM0Er8Dem5nqi4jeOLrVJDoE8tZEpnMJmtkvNbB1EIPPwHcdkF6b1oUA==}
+
   '@frostyard/lodge-client@https://codeload.github.com/frostyard/lodge/tar.gz/c31c333fee4828d00228415198f7b7b1008f5950#path:client':
     resolution: {gitHosted: true, integrity: sha512-s/Ip6AQkg53SJ3I0cr+ep7IHF83jv36WcgNw22/nkRQeoqQektAQAND4+ekdb0VQ9qspqxpsO70DMkjop975aQ==, path: client, tarball: https://codeload.github.com/frostyard/lodge/tar.gz/c31c333fee4828d00228415198f7b7b1008f5950}
     version: 0.2.0
+
+  '@frostyard/lodge-ui@https://codeload.github.com/frostyard/lodge/tar.gz/6975d3b8967af154a08b8d87d3cd4beee12e2dea#path:ui':
+    resolution: {gitHosted: true, integrity: sha512-Kb9RQN1Lcv5aIxLSqmnR7Kn5iSdFN4JSBZ8iBpHni66G7iwAUcIU/2AFR48U1fWQasNcLHcGEnQ7gObN/ZFq/A==, path: ui, tarball: https://codeload.github.com/frostyard/lodge/tar.gz/6975d3b8967af154a08b8d87d3cd4beee12e2dea}
+    version: 0.1.0
+    peerDependencies:
+      lucide-react: ^1
+      react: ^19
+    peerDependenciesMeta:
+      lucide-react:
+        optional: true
+      react:
+        optional: true
 
   '@jridgewell/resolve-uri@3.1.2':
     resolution: {integrity: sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw==}
@@ -745,7 +763,13 @@ packages:
 
 snapshots:
 
+  '@fontsource-variable/inter@5.3.0': {}
+
   '@frostyard/lodge-client@https://codeload.github.com/frostyard/lodge/tar.gz/c31c333fee4828d00228415198f7b7b1008f5950#path:client': {}
+
+  '@frostyard/lodge-ui@https://codeload.github.com/frostyard/lodge/tar.gz/6975d3b8967af154a08b8d87d3cd4beee12e2dea#path:ui':
+    dependencies:
+      '@fontsource-variable/inter': 5.3.0
 
   '@jridgewell/resolve-uri@3.1.2': {}
 

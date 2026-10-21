@@ -1,75 +1,46 @@
 /* Porter's chat. Mobile first: the companion's sheet can be 360 px wide and
-   its panel about 400; the full app is wider. System fonts only, and
-   nothing remote. The theme is lodge's (data-theme on the root), with
-   prefers-color-scheme until init says. */
+   its panel about 400; the full app is wider. The look comes from
+   @frostyard/lodge-ui (lodge ADR-0018): its tokens, its base layer and
+   Inter. Nothing is remote. The theme is lodge's (data-theme on the root),
+   which the package's tokens read. */
+@import "@frostyard/lodge-ui/fonts.css";
+@import "@frostyard/lodge-ui/tokens.css";
+@import "@frostyard/lodge-ui/base.css";
 
 :root {
-  color-scheme: light;
-  --bg: #ffffff;
-  --fg: #1c1c21;
-  --muted: #6a6a74;
-  --faint: #9a9aa4;
-  --border: #e2e2e8;
-  --raised: #f5f5f8;
-  --input-bg: #ffffff;
+  /* The shared tokens, under Porter's own names. --accent needs no alias:
+     the package's name is the same. */
+  --bg: var(--bg-window);
+  --fg: var(--text-primary);
+  --muted: var(--text-secondary);
+  --faint: var(--text-tertiary);
+  --border: var(--separator);
+  --raised: var(--bg-toolbar);
+  --input-bg: var(--bg-window);
+  --chip-bg: var(--bg-sidebar);
+  --accent-fg: var(--accent-contrast);
+  --code-bg: var(--bg-code);
+  --flash: var(--bg-highlight);
+  --shadow: var(--popover-shadow);
+  /* Porter's own: the owner's bubble, the two colours text needs that the
+     package has no readable token for, and the monospace stack. */
   --owner-bg: #e8edfb;
-  --owner-fg: #1c1c21;
-  --chip-bg: #f0f2f8;
-  --accent: #3454d1;
-  --accent-fg: #ffffff;
+  --owner-fg: var(--fg);
   --ok: #1a7f37;
   --danger: #b42318;
-  --code-bg: #f1f1f5;
-  --flash: #fff4c2;
-  --shadow: 0 2px 10px rgb(0 0 0 / 12%);
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif;
+  font-family: "Inter Variable", system-ui, sans-serif;
   font-size: 15px;
   line-height: 1.45;
 }
-
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --bg: #17171b;
-    --fg: #ececf1;
-    --muted: #a0a0aa;
-    --faint: #74747e;
-    --border: #2d2d34;
-    --raised: #202026;
-    --input-bg: #1d1d22;
     --owner-bg: #27315a;
-    --owner-fg: #eef0fa;
-    --chip-bg: #24242c;
-    --accent: #8ea4ff;
-    --accent-fg: #11131c;
-    --ok: #6fd28a;
-    --danger: #ff8a7a;
-    --code-bg: #24242a;
-    --flash: #4a4220;
-    --shadow: 0 2px 12px rgb(0 0 0 / 45%);
   }
 }
 
 :root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #17171b;
-  --fg: #ececf1;
-  --muted: #a0a0aa;
-  --faint: #74747e;
-  --border: #2d2d34;
-  --raised: #202026;
-  --input-bg: #1d1d22;
   --owner-bg: #27315a;
-  --owner-fg: #eef0fa;
-  --chip-bg: #24242c;
-  --accent: #8ea4ff;
-  --accent-fg: #11131c;
-  --ok: #6fd28a;
-  --danger: #ff8a7a;
-  --code-bg: #24242a;
-  --flash: #4a4220;
-  --shadow: 0 2px 12px rgb(0 0 0 / 45%);
 }
 
 *,
@@ -87,7 +58,9 @@ body {
 }
 
 body {
+  font: inherit;
   overflow: hidden;
+  user-select: text;
 }
 
 button,

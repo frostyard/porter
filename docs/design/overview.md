@@ -217,6 +217,12 @@ the same id, and event `working`.
   input stays above the keyboard.
 - **It loads nothing remote.** Links show their destination, and lodge
   addresses open through `lodge.open`.
+- **It draws in the suite's look**: the colour tokens, the base layer and
+  Inter come from `@frostyard/lodge-ui`
+  ([lodge ADR-0018](https://github.com/frostyard/lodge/blob/main/docs/adr/0018-a-ui-package-beside-the-client.md)),
+  with Porter's own names (`--bg`, `--fg`, …) aliased to them in one block.
+  Its own remain only where the package has no readable token: the owner's
+  bubble, the two state colours text needs, and the monospace stack.
 
 ### What it reaches
 
