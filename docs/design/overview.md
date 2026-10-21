@@ -11,8 +11,12 @@ routines in the vault),
 Contracts: [specs/routines.md](../specs/routines.md), and lodge's
 [app contract](https://github.com/frostyard/lodge/blob/main/docs/specs/app-contract.md).
 
-**Status: designed, not built** (2026-10-19). The repository holds lodge's
-app scaffold. The [roadmap](../plans/0001-roadmap.md) builds the rest.
+**Status: Phase 2 built on branch `phase2/chat`** (2026-10-20). Built:
+- porterd: the thread store, the tool registry over lodge's agent socket,
+  the agent loop and the thread API;
+- the companion chat UI.
+Routines, Activity and Approvals are Phase 3 of the
+[roadmap](../plans/0001-roadmap.md).
 
 ## Overview
 
@@ -42,15 +46,25 @@ A Go daemon on lodge's kit (`kit/lodgeapp`, `kit/jsonrpc`,
 `kit/inference`), as user `frostporter`. Its parts:
 
 - **The agent loop:** OpenAI-style chat completions with tools, through
-  `kit/inference`, streaming each answer to the UI. A turn ends at the
-  model's final answer, or at a limit of 40 tool calls.
+  `kit/inference`. A turn ends at the model's final answer, or at a limit
+  of 40 tool calls.
+  - Each step is one request, not yet streamed: the UI sees each tool's
+    card as it finishes, and the answer when it is complete.
+  - Tool steps run with the local model's thinking off.
 - **The tool registry:**
   - One MCP client per app, through lodge's local agent socket, each with
     that app's token. The registry lists each app's tools, as the app offers
     them under the token's scope, under the app's prefix (`notes.read_note`,
     `mail.draft_reply`).
-  - Porter's own tools: `search_thread`, `now`, `remember` (used only when
-    the owner asks), and `propose`, which puts an action up for approval.
+  - Porter's own tools: `search_thread`, `now`, and `remember`. `remember`
+    appends a line to `Porter/Memory.md` through notes, only when the owner
+    asks, and never in a routine. Phase 3 adds `propose`, which puts an
+    action up for approval.
+  - Tools are marked Read, Draft, Write, Change, Capture or Never.
+    - A tool whose name says it sends, posts, forwards or invites is
+      Never, and is never offered.
+    - notes' `append_to_daily_note` is Capture: porterd never runs it from
+      the model, but shows a card the owner confirms.
 - **The policy:** chat gets every registered tool, and routines get only the
   unattended set (ADR-0004). Each tool is marked by the action it takes:
   read, draft, write in `Porter/`, append to the daily note, or change mail
@@ -77,6 +91,32 @@ Tool results are wrapped as content from their app, never as instructions.
 In chat the priority is `interactive`, with thinking off for tool steps.
 Routines use their own `thinking` and `model`.
 
+### Holding the model to what it did
+
+The local model copies how past replies went, and in its first live use
+(2026-10-19) it wrote "Draft ready" four times without calling a tool. It
+also drafted on a guessed message id. porterd now checks the model rather
+than trusting it:
+- **History:** each past reply is replayed as the tool calls it made (a
+  card keeps its arguments, with long strings shortened), then each call's
+  outcome, then its text. The full results are not kept.
+- **Failed exchanges are left out:** a reply that claimed an action no
+  card shows is left out, with the owner's turn it answered. It is left
+  out of the history and of `search_thread`. A placeholder in its place
+  was copied word for word, so none is used.
+- **The claim check:** a new answer's claims (a draft, a capture,
+  memory, a task) are checked against this reply's cards. So is any repeat
+  of porterd's own notes or markers. An unbacked answer is sent back once
+  with `tool_choice: required`. If the claim is still unbacked, the reply
+  says that nothing was done.
+- **Ids:** a tool that is not a read takes only ids it can trace:
+  - ids a tool returned in this reply;
+  - ids the owner wrote;
+  - ids the screen shows;
+  - ids an earlier successful call used.
+
+  Any other id is refused, and nothing is done.
+
 ### The system prompt (draft 1)
 
 Placeholders in {braces} are filled on every request.
@@ -89,19 +129,31 @@ Placeholders in {braces} are filled on every request.
 >   No greetings, filler, exclamation marks or emoji.
 > - Look things up before you answer. If the notes, mail, calendar or tasks
 >   can say, use the tools rather than memory.
-> - Say where things came from. Link each source by its lodge address: a
->   note's `/notes/…` route, a message's `/mail/message/<Message-ID>`.
+> - Say where things came from. Link each source by the url its tool
+>   returned, as a markdown link, exactly as given.
 > - Never invent. If the sources don't say, say so, or ask. In a draft,
 >   never fill a gap with a guess (a time, someone's plans, a commitment).
 >   Leave a bracketed placeholder, such as `[time?]`.
+> - Never guess an id (a message, draft, task, event or note path). Find it
+>   first with a search or list tool, and use exactly the id that tool
+>   returned. If several match, ask which.
 > - If a request is ambiguous, ask one short question instead of guessing.
+> - Only say you did something (drafted, captured, created, flagged,
+>   remembered) when a tool call in this reply did it. Earlier replies don't
+>   count: their text is not an action. If no tool can do what was asked,
+>   say so plainly.
 >
 > **What you may do**
 > - Read anything your tools reach.
-> - Draft replies; never send. Say plainly that a draft is waiting for
->   review.
-> - Write notes only in `Porter/`. Append to today's daily note only when
->   {owner} asks you to capture something and confirms the text.
+> - Draft replies; never send. Write a draft as {owner}, in their voice,
+>   signed with their name or not at all, never as Porter. Say plainly
+>   that a draft is waiting for review, and link it when the tool returned
+>   a url.
+> - Write notes only in `Porter/`. To capture something into today's daily
+>   note, call append_to_daily_note: {owner} sees the text and confirms it
+>   before anything is appended.
+> - Call remember only when {owner} asks you to remember something. If you
+>   notice something worth keeping, suggest it in one line instead.
 > - Flag or move mail, and create tasks, only when {owner} asks in this
 >   conversation.
 > - Anything else that would help, propose rather than do.
@@ -123,7 +175,11 @@ Placeholders in {braces} are filled on every request.
 
 ### The UI
 
-The web bundle, on `@frostyard/lodge-client`:
+The web bundle, on `@frostyard/lodge-client`, speaks porterd's `thread`
+domain (`schema/rpc/thread.yaml`): `list`, `send`, `search`, `confirm`,
+`cancel` and `subscribe`. Events arrive as notifications of method `event`
+in the kit's envelope: event `turn` with a turn, which replaces a turn of
+the same id, and event `working`.
 
 - **The companion** is the thread and an input. Context chips show what the
   current app reported. Tool calls and actions appear as cards: what it did,
@@ -146,10 +202,13 @@ The web bundle, on `@frostyard/lodge-client`:
 
 ## Operational notes
 
-- **Configuration:** `/etc/porter/porter.toml` holds the owner's name, time
-  zone and vault id, and the aliases for chat and for routines. Each app's
-  token is kept in `/var/lib/frostporter/tokens/<app>` (0600), set with
-  `porterd token set <app>` from stdin, never on the command line.
+- **Configuration:** `/etc/porter/porter.json` holds the owner's name, the
+  time zone, the aliases for chat and for routines, and the apps Porter
+  reaches. Unknown keys are refused. Each app's token is kept in
+  `/var/lib/frostporter/tokens/<app>` (0600). It is set with
+  `porterd token set <app>` from stdin, never on the command line, and
+  issued with `lodgectl token issue … --agent frostporter`, so it works only
+  on the agent socket.
 - **Dependencies:**
   - lodge's agent socket and inference socket must be up. Without
     inference, chat says the model is unavailable, and routines retry
