@@ -38,6 +38,9 @@ repositories do, read their file.
 - `web/`: the web bundle on `@frostyard/lodge-client`.
 - `packaging/lodge`: the manifest, the socket and service units, the system
   user, and `stage.sh`.
+- `.github/workflows/ci.yml`: CI, the jobs of `make ci`.
+  `internal/workflowcheck` tests that its actions are SHA-pinned with least
+  privilege (frostyard/core ADR-0021).
 - Planned (see the design doc):
   - the agent loop and tool registry;
   - the thread store;
@@ -50,6 +53,8 @@ repositories do, read their file.
   Go change complete.
 - `make web-build` builds the bundle in an nsl machine. Never run pnpm, node
   or cargo on the host.
+- `make ci` is `make verify`, `make race` and `make web-check` (nsl). CI runs
+  the same targets on every pull request and push to `main`.
 - `make lodge-package` stages Porter in lodge's install layout.
 
 ## Invariants (decided; binding from the first line of code)
