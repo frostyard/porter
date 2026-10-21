@@ -13,10 +13,12 @@ Status (2026-10-21):
 - Phase 1 is built and checked on lodge's host (2026-10-19).
 - Phases 2 and 3 are built and merged to `main` (porter#1 and porter#2,
   2026-10-21). Their done-when checks are still open.
-- Phase 5 (reading from frostread) is built, before Phase 4, in porter's
-  `feat/reading` pull request ([ADR-0007](../adr/0007-porter-reads-frostread-read-only.md),
-  Proposed 2026-10-21). Its done-when check is open.
-- `main` at `73eead0` is deployed on lodge's host (2026-10-21). See
+- Phase 5 (reading from frostread) is built before Phase 4, merged
+  (porter#7) and deployed (2026-10-21,
+  [ADR-0007](../adr/0007-porter-reads-frostread-read-only.md), Accepted).
+  A brief run by hand lists frostread items. The chat half of its
+  done-when check is open.
+- `main` at `d3db41b` is deployed on lodge's host (2026-10-21). See
   [Deployments](#deployments).
 
 ## Deployments
@@ -28,6 +30,7 @@ Porter runs on lodge's host, the Incus VM `frostnotes-hub`, as lodge's
 |------|---------|------|--------------|
 | 2026-10-20 | web `7405fdf`, porterd `d8b1e1b` | Phases 2 and 3 from their branches | (not recorded) |
 | 2026-10-21 | `73eead0` | `main` after porter#5: the service-bell icon (frostmail ADR-0015's frame), the look from `@frostyard/lodge-ui` `ui/v0.1.0`, times in the owner's zone, links into the vault, the `routine_alias` default | `lodgectl status` and `lodgectl apps` show porter `73eead0` up; the journal since the restart has no warning or error; the icon shows in the rail and on the companion button; 1 chat turn; a link in a brief opens the note, and a `/mail/message/…` link in a brief opens the message |
+| 2026-10-21 | `d3db41b` | `main` after porter#7: Porter reads frostread, read-only (ADR-0007); a routine knows its last success. `read` added to `/etc/porter/porter.json`; token `porter-read` (scope `read`, agent `frostporter`). Rollback archive `/root/porter-rollback-73eead0-20261021T155413Z.tar.gz` | `lodgectl apps` shows porter `d3db41b` up, with 3 apps; no warning in the journal since the restart; a temporary routine with the Morning brief's body and no `output` ran by hand (15:57 UTC, 0 actions), and its Reading section listed The Go Blog's new item with a `/read/item/<id>` link and the unread count; the temporary routine was then deleted |
 
 How the host differs from `make lodge-package`'s layout:
 - porterd is `/opt/lodge/bin/porterd`, with the version before it kept as
@@ -158,6 +161,8 @@ not ([ADR-0007](../adr/0007-porter-reads-frostread-read-only.md)).
 - **Done when,** on lodge's host: a brief run by hand lists frostread items
   by source with links to `/read/item/<id>`, and chat answers "what is new
   in my feeds?" from Read.
+- **The brief half is met** (2026-10-21, `d3db41b`; see
+  [Deployments](#deployments)). The chat half is open.
 
 ## Later / ideas
 
