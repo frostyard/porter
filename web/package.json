@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@frostyard/lodge-client": "github:frostyard/lodge#client/v0.2.0&path:client",
+    "@frostyard/lodge-ui": "github:frostyard/lodge#ui/v0.1.0&path:ui",
     "marked": "18.0.14"
   },
   "devDependencies": {
