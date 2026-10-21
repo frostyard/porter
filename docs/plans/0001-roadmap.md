@@ -5,11 +5,40 @@ chat in the companion, then routines, then the GitHub manager. It is
 lodge's roadmap Phase 5 (the assistant) carried into a build, and it waits
 on that phase's lodge work.
 
-Status (2026-10-19):
+Status (2026-10-21):
 - Phase 0 is done.
 - The founding documents (ADRs 0003 to 0006, the design doc and
   [specs/routines.md](../specs/routines.md)) are Proposed.
 - Phase 1 is built and checked on lodge's host (2026-10-19).
+- Phases 2 and 3 are built and merged to `main` (porter#1 and porter#2,
+  2026-10-21). Their done-when checks are still open.
+- `main` at `73eead0` is deployed on lodge's host (2026-10-21). See
+  [Deployments](#deployments).
+
+## Deployments
+
+Porter runs on lodge's host, the Incus VM `frostnotes-hub`, as lodge's
+`porter` app.
+
+| Date | Version | What | Checked live |
+|------|---------|------|--------------|
+| 2026-10-20 | web `7405fdf`, porterd `d8b1e1b` | Phases 2 and 3 from their branches | (not recorded) |
+| 2026-10-21 | `73eead0` | `main` after porter#5: the service-bell icon (frostmail ADR-0015's frame), the look from `@frostyard/lodge-ui` `ui/v0.1.0`, times in the owner's zone, links into the vault, the `routine_alias` default | `lodgectl status` and `lodgectl apps` show porter `73eead0` up; the journal since the restart has no warning or error; the icon shows in the rail and on the companion button; 1 chat turn; a link in a brief opens the note, and a `/mail/message/…` link in a brief opens the message |
+
+How the host differs from `make lodge-package`'s layout:
+- porterd is `/opt/lodge/bin/porterd`, with the version before it kept as
+  `porterd.prev`. stage.sh stages `/usr/local/bin/porterd`.
+- The units are in `/etc/systemd/system/` and the sysusers.d entry in
+  `/etc/sysusers.d/`. Their `ExecStart` is `/opt/lodge/bin/porterd`; they
+  are otherwise the same as stage.sh's.
+- Thus do not extract the staged tarball onto `/`: porterd would not
+  change. Extract it to a directory, copy `usr/local/bin/porterd` to
+  `/opt/lodge/bin/porterd`, replace `/usr/share/lodge/apps/porter/` with
+  the staged one (directories 0755, files 0644, owned by root), then
+  `systemctl daemon-reload`, `systemctl restart frostporter.service` and
+  `lodgectl reload`.
+- `/etc/porter/porter.json` has `lodge_url` set to lodge's own tailnet node
+  (from `lodgectl status`), not to the host's name.
 
 ## Phase 0 — The scaffold (done)
 
