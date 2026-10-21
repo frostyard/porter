@@ -31,7 +31,7 @@ YAML frontmatter, then the prompt as the body.
 | `timezone` | string | no | An IANA zone; defaults to Porter's configured zone |
 | `output` | string | no | A vault path template ending in `.md`, under `Porter/` and not under `Porter/Routines/`; placeholders below |
 | `thinking` | bool | no | Whether the model thinks before answering; default `false` |
-| `model` | string | no | A lodge inference alias Porter may use; default `local` |
+| `model` | string | no | A lodge inference alias Porter may use; default Porter's `routine_alias` (configuration), itself `local` unless set |
 | `enabled` | bool | no | Default `true`; `false` keeps the routine without running it |
 
 | Placeholder | Becomes |
@@ -84,23 +84,32 @@ Link every item.
 1. **When:** porterd starts a run when the schedule matches the current
    minute in the routine's zone.
 2. **Tools and rights:** the run gets the system prompt, `Porter/Memory.md`
-   and the routine's body. It uses only the unattended tools of
-   [ADR-0004](../adr/0004-porter-drafts-and-the-owner-sends.md): reads,
-   mail drafts, and notes under `Porter/` outside `Porter/Routines/`. Its
-   inference requests are `background`.
+   and the routine's body, but not the thread. It runs only the unattended
+   tools of [ADR-0004](../adr/0004-porter-drafts-and-the-owner-sends.md):
+   reads, mail drafts, and notes under `Porter/` outside `Porter/Routines/`.
+   The other tools are offered only to propose. A call of one, such as
+   flagging mail or appending to the daily note, does not run. It becomes
+   an approval card, which runs only when the owner approves it. `remember`
+   is not offered. Its inference requests are `background`.
 3. **Output:** the model's final answer is the output. With `output` set,
    porterd writes it to that note, with frontmatter `routine: <name>` and
-   `run: <RFC 3339 time>`. Without `output`, the answer is the thread line
-   itself.
+   `run: <the run's scheduled time, RFC 3339 in the routine's zone>`.
+   Without `output`, the answer is the thread line itself, after the
+   routine's name. In the output note, a link to a note is a wikilink, and
+   any other lodge address is an absolute URL under Porter's `lodge_url`,
+   so the note's links work in notes and in Obsidian.
 4. **Reporting:** each run posts one line in the thread, linking to the
-   output, and records an Activity entry.
+   output. Its cards are what the run did and proposes: drafts, notes
+   written, and approvals. It also records an Activity entry.
 
 ## Rules
 
 - A routine's prompt cannot widen what a run may do. porterd gives runs
   only the unattended tools, and the apps' scopes enforce the rest.
-- porterd reads `Porter/Routines/` at start and whenever notes reports a
-  change there, so a new or edited routine needs no restart.
+- porterd reads `Porter/Routines/` at start. After that, it lists the
+  folder every minute and rereads each note whose modified time changed,
+  so a new or edited routine needs no restart. notes pushes no changes to
+  agents.
 - An invalid routine never runs, even partly. That covers:
   - frontmatter that doesn't parse;
   - an unknown field, or a field with a bad value;

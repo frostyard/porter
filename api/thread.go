@@ -30,19 +30,26 @@ const (
 	CardTool CardKind = "tool"
 	// CardCapture is text Porter proposes to append to today's daily note.
 	CardCapture CardKind = "capture"
+	// CardApproval is an action a routine proposed but may not take
+	// unattended: App, Tool and Args name it, and it runs only when the
+	// owner approves it.
+	CardApproval CardKind = "approval"
 )
 
 // CardStatus is where a card stands.
 type CardStatus string
 
 const (
-	// StatusDone means the tool ran, or the capture was appended.
+	// StatusDone means the tool ran, the capture was appended, or the
+	// approved action ran.
 	StatusDone CardStatus = "done"
-	// StatusFailed means the tool or the append failed; Detail says why.
+	// StatusFailed means the tool, the append or the approved action
+	// failed; Detail says why.
 	StatusFailed CardStatus = "failed"
-	// StatusPending is a capture waiting for the owner.
+	// StatusPending is a capture or an approval waiting for the owner.
 	StatusPending CardStatus = "pending"
-	// StatusCancelled is a capture the owner cancelled.
+	// StatusCancelled is a capture the owner cancelled, or an approval
+	// they dismissed.
 	StatusCancelled CardStatus = "cancelled"
 )
 
@@ -78,8 +85,9 @@ type Card struct {
 	Text string `json:"text,omitzero"`
 	// Detail is why it failed.
 	Detail string `json:"detail,omitzero"`
-	// Args is the tool call's arguments as a JSON object, long strings
-	// shortened; porterd replays it to the model as history.
+	// Args is the tool call's arguments as a JSON object. For an approval
+	// they are whole, what it runs with; otherwise long strings are
+	// shortened, and porterd replays them to the model as history.
 	Args string `json:"args,omitzero"`
 }
 
@@ -164,6 +172,9 @@ type ThreadCancelParams struct {
 // ThreadSubscribeParams holds the params of thread.subscribe.
 type ThreadSubscribeParams struct{}
 
+// ThreadPendingParams holds the params of thread.pending.
+type ThreadPendingParams struct{}
+
 // ThreadService is the owner's thread with Porter.
 type ThreadService interface {
 	List(ctx context.Context, p *ThreadListParams) (*TurnList, error)
@@ -171,6 +182,7 @@ type ThreadService interface {
 	Search(ctx context.Context, p *ThreadSearchParams) (*TurnList, error)
 	Confirm(ctx context.Context, p *ThreadConfirmParams) (*Turn, error)
 	Cancel(ctx context.Context, p *ThreadCancelParams) error
+	Pending(ctx context.Context, p *ThreadPendingParams) (*TurnList, error)
 	Subscribe(ctx context.Context, p *ThreadSubscribeParams) (bool, error)
 }
 
@@ -210,6 +222,13 @@ func registerThread(r *Router, s ThreadService) {
 			return nil, err
 		}
 		return nil, s.Cancel(ctx, &p)
+	})
+	r.handle("thread.pending", callers, func(ctx context.Context, raw jsontext.Value) (any, error) {
+		var p ThreadPendingParams
+		if err := decodeParams(raw, &p, nil); err != nil {
+			return nil, err
+		}
+		return s.Pending(ctx, &p)
 	})
 	r.handle("thread.subscribe", callers, func(ctx context.Context, raw jsontext.Value) (any, error) {
 		var p ThreadSubscribeParams
@@ -267,6 +286,15 @@ func (x ThreadClient) Confirm(ctx context.Context, p *ThreadConfirmParams) (*Tur
 // Cancel calls thread.cancel.
 func (x ThreadClient) Cancel(ctx context.Context, p *ThreadCancelParams) error {
 	return x.c.Call(ctx, "thread.cancel", p, nil)
+}
+
+// Pending calls thread.pending.
+func (x ThreadClient) Pending(ctx context.Context, p *ThreadPendingParams) (*TurnList, error) {
+	var r TurnList
+	if err := x.c.Call(ctx, "thread.pending", p, &r); err != nil {
+		return nil, err
+	}
+	return &r, nil
 }
 
 // Subscribe calls thread.subscribe.

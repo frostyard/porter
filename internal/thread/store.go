@@ -51,6 +51,24 @@ CREATE TABLE IF NOT EXISTS summary (
 	upto INTEGER NOT NULL,
 	text TEXT    NOT NULL
 );
+CREATE TABLE IF NOT EXISTS activity (
+	id      INTEGER PRIMARY KEY,
+	at      TEXT    NOT NULL,
+	kind    TEXT    NOT NULL,
+	routine TEXT    NOT NULL,
+	ok      INTEGER NOT NULL DEFAULT 0,
+	text    TEXT    NOT NULL,
+	url     TEXT    NOT NULL DEFAULT '',
+	turn    INTEGER NOT NULL DEFAULT 0,
+	cards   TEXT    NOT NULL DEFAULT '[]'
+);
+CREATE TABLE IF NOT EXISTS routines (
+	name           TEXT PRIMARY KEY,
+	first_seen     TEXT NOT NULL,
+	last_scheduled TEXT NOT NULL DEFAULT '',
+	last_ok        INTEGER,
+	reported       TEXT NOT NULL DEFAULT ''
+);
 `
 
 // Open opens or creates the thread's database at path. A Porter turn left
@@ -203,6 +221,129 @@ func (s *Store) SetSummary(ctx context.Context, upto int64, text string) error {
 	if _, err := s.db.ExecContext(ctx, `INSERT INTO summary (id, upto, text) VALUES (1, ?, ?)
 		ON CONFLICT (id) DO UPDATE SET upto = excluded.upto, text = excluded.text`, upto, text); err != nil {
 		return fmt.Errorf("set summary: %w", err)
+	}
+	return nil
+}
+
+// Pending returns at most limit turns holding a pending capture or
+// approval, newest first.
+func (s *Store) Pending(ctx context.Context, limit int) ([]api.Turn, error) {
+	return s.query(ctx, `SELECT id, at, role, text, context, cards, done FROM turns t
+		WHERE EXISTS (SELECT 1 FROM json_each(t.cards) c WHERE json_extract(c.value, '$.status') = 'pending'
+			AND json_extract(c.value, '$.kind') IN ('capture', 'approval'))
+		ORDER BY id DESC LIMIT ?`, limit)
+}
+
+// AddEntry stores e as a new Activity entry, setting its id and time.
+func (s *Store) AddEntry(ctx context.Context, e api.Entry) (api.Entry, error) {
+	e.At = s.now().UTC().Format(time.RFC3339)
+	if e.Cards == nil {
+		e.Cards = []api.Card{}
+	}
+	cards, err := json.Marshal(e.Cards)
+	if err != nil {
+		return e, fmt.Errorf("encode cards: %w", err)
+	}
+	res, err := s.db.ExecContext(ctx, `INSERT INTO activity (at, kind, routine, ok, text, url, turn, cards)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, e.At, string(e.Kind), e.Routine, e.OK, e.Text, e.URL, e.Turn, string(cards))
+	if err != nil {
+		return e, fmt.Errorf("add activity: %w", err)
+	}
+	if e.ID, err = res.LastInsertId(); err != nil {
+		return e, fmt.Errorf("add activity: %w", err)
+	}
+	return e, nil
+}
+
+// Entries returns at most limit Activity entries with ids below before
+// (all, when before is 0), newest first, and whether older ones exist.
+func (s *Store) Entries(ctx context.Context, before int64, limit int) ([]api.Entry, bool, error) {
+	if before <= 0 {
+		before = 1 << 62
+	}
+	// An entry's cards are read from the turn that reported it, when there
+	// is one, so an approval shows whether it was approved since.
+	rows, err := s.db.QueryContext(ctx, `SELECT a.id, a.at, a.kind, a.routine, a.ok, a.text, a.url, a.turn,
+		COALESCE(t.cards, a.cards) FROM activity a LEFT JOIN turns t ON a.turn > 0 AND t.id = a.turn
+		WHERE a.id < ? ORDER BY a.id DESC LIMIT ?`, before, limit+1)
+	if err != nil {
+		return nil, false, fmt.Errorf("query activity: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var es []api.Entry
+	for rows.Next() {
+		var e api.Entry
+		var kind, cards string
+		if err := rows.Scan(&e.ID, &e.At, &kind, &e.Routine, &e.OK, &e.Text, &e.URL, &e.Turn, &cards); err != nil {
+			return nil, false, fmt.Errorf("scan activity: %w", err)
+		}
+		e.Kind = api.EntryKind(kind)
+		if err := json.Unmarshal([]byte(cards), &e.Cards); err != nil {
+			return nil, false, fmt.Errorf("activity %d cards: %w", e.ID, err)
+		}
+		if e.Cards == nil {
+			e.Cards = []api.Card{}
+		}
+		es = append(es, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+	more := len(es) > limit
+	if more {
+		es = es[:limit]
+	}
+	return es, more, nil
+}
+
+// RoutineState is what porterd remembers of a routine between starts.
+type RoutineState struct {
+	// FirstSeen is when porterd first read the routine.
+	FirstSeen time.Time
+	// LastScheduled is the scheduled time of its last run; zero before one.
+	LastScheduled time.Time
+	// LastOK says whether that run succeeded; nil before one.
+	LastOK *bool
+	// Reported is the hash of the version whose invalidity the thread was
+	// told of.
+	Reported string
+}
+
+// SeeRoutine returns a routine's state, first recording it as seen at now.
+func (s *Store) SeeRoutine(ctx context.Context, name string, now time.Time) (RoutineState, error) {
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO routines (name, first_seen) VALUES (?, ?) ON CONFLICT (name) DO NOTHING`,
+		name, now.UTC().Format(time.RFC3339)); err != nil {
+		return RoutineState{}, fmt.Errorf("see routine: %w", err)
+	}
+	var st RoutineState
+	var first, last string
+	var ok sql.NullBool
+	if err := s.db.QueryRowContext(ctx, `SELECT first_seen, last_scheduled, last_ok, reported FROM routines WHERE name = ?`, name).
+		Scan(&first, &last, &ok, &st.Reported); err != nil {
+		return RoutineState{}, fmt.Errorf("routine state: %w", err)
+	}
+	st.FirstSeen, _ = time.Parse(time.RFC3339, first)
+	st.LastScheduled, _ = time.Parse(time.RFC3339, last)
+	if ok.Valid {
+		st.LastOK = &ok.Bool
+	}
+	return st, nil
+}
+
+// SetRan records a routine's run scheduled at t, and whether it succeeded.
+func (s *Store) SetRan(ctx context.Context, name string, t time.Time, ok bool) error {
+	if _, err := s.db.ExecContext(ctx, `UPDATE routines SET last_scheduled = ?, last_ok = ? WHERE name = ?`,
+		t.UTC().Format(time.RFC3339), ok, name); err != nil {
+		return fmt.Errorf("record run: %w", err)
+	}
+	return nil
+}
+
+// SetReported records that the thread was told the routine's version hash
+// is invalid.
+func (s *Store) SetReported(ctx context.Context, name, hash string) error {
+	if _, err := s.db.ExecContext(ctx, `UPDATE routines SET reported = ? WHERE name = ?`, hash, name); err != nil {
+		return fmt.Errorf("record report: %w", err)
 	}
 	return nil
 }

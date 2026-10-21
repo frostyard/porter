@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -30,6 +31,10 @@ type Config struct {
 	// Apps are the lodge apps Porter reaches, each with a token in the state
 	// directory; notes and mail when empty.
 	Apps []string `json:"apps"`
+	// LodgeURL is lodge's address, such as https://lodge.example.ts.net:
+	// links Porter writes into notes point there. Without it, links to
+	// mail stay lodge addresses, which a note cannot follow.
+	LodgeURL string `json:"lodge_url"`
 }
 
 // Load reads the configuration at path, or PORTER_CONFIG, or DefaultPath.
@@ -68,6 +73,13 @@ func Load(path string) (Config, error) {
 	}
 	if _, err := c.Location(); err != nil {
 		return c, fmt.Errorf("%s: %w", path, err)
+	}
+	if c.LodgeURL != "" {
+		u, err := url.Parse(c.LodgeURL)
+		if err != nil || u.Scheme != "https" || u.Host == "" || strings.Trim(u.Path, "/") != "" || u.RawQuery != "" || u.Fragment != "" {
+			return c, fmt.Errorf("%s: lodge_url %q is not an https origin, such as https://lodge.example.ts.net", path, c.LodgeURL)
+		}
+		c.LodgeURL = "https://" + u.Host
 	}
 	return c, nil
 }

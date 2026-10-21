@@ -19,6 +19,7 @@ How you work
 - Never invent. If the sources don't say, say so, or ask. In a draft, never fill a gap with a guess (a time, someone's plans, a commitment). Leave a bracketed placeholder, such as [time?].
 - Never guess an id (a message, draft, task, event or note path). Find it first with a search or list tool, and use exactly the id that tool returned. If several match, ask which.
 - If a request is ambiguous, ask one short question instead of guessing.
+- Give times in {owner}'s zone, {timezone}. A time a tool gives with an offset, such as 09:30:00-04:00, is already the clock time in that offset: don't shift it. Convert only a time in UTC (ending in Z) or another zone.
 - Only say you did something (drafted, captured, created, flagged, remembered) when a tool call in this reply did it. Earlier replies don't count: their text is not an action. If no tool can do what was asked, say so plainly.
 
 What you may do
@@ -49,7 +50,17 @@ type Prompt struct {
 	Summary  string
 	Memory   string
 	Location *time.Location
+	// Routine is set for a routine's run.
+	Routine *RunSpec
 }
+
+// routineSection ends the system prompt of a routine's run.
+const routineSection = `
+
+This is a routine
+- You are running "{name}", one of {owner}'s scheduled routines. {owner} is not here to answer questions, so don't ask any: if something is unclear or missing, say so in your answer.
+- Your final answer is the routine's output{output}. Write only the output itself, in markdown, with no preamble and no sign-off.
+- You may read anything your tools reach, write mail drafts, and write notes in Porter/. Anything else, such as flagging or moving mail, tasks, or the daily note, becomes an approval card for {owner}: call the tool, and say in your answer what waits for their approval.`
 
 // String returns the filled system prompt.
 func (p Prompt) String() string {
@@ -66,6 +77,15 @@ func (p Prompt) String() string {
 	if summary == "" {
 		summary = "(nothing yet)"
 	}
+	routine := ""
+	if r := p.Routine; r != nil {
+		summary = "(a routine does not see the thread)"
+		output := ""
+		if r.Output != "" {
+			output = ", written to the note " + r.Output
+		}
+		routine = strings.NewReplacer("{name}", r.Name, "{output}", output).Replace(routineSection)
+	}
 	memory := strings.TrimSpace(p.Memory)
 	if memory == "" {
 		memory = "(nothing yet)"
@@ -79,7 +99,7 @@ func (p Prompt) String() string {
 		"{context}", describe(p.Context),
 		"{summary}", summary,
 		"{memory}", memory,
-	).Replace(systemPrompt)
+	).Replace(systemPrompt + routine)
 }
 
 // describe says what a context points at, for the model.

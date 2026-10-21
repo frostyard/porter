@@ -58,8 +58,10 @@ A Go daemon on lodge's kit (`kit/lodgeapp`, `kit/jsonrpc`,
     `mail.draft_reply`).
   - Porter's own tools: `search_thread`, `now`, and `remember`. `remember`
     appends a line to `Porter/Memory.md` through notes, only when the owner
-    asks, and never in a routine. Phase 3 adds `propose`, which puts an
-    action up for approval.
+    asks, and never in a routine. In a routine, a call of a tool that is
+    not unattended doesn't run: it becomes an **approval card** (Phase 3).
+    Its whole arguments are kept, and it runs as the owner's action when
+    they approve it.
   - Tools are marked Read, Draft, Write, Change, Capture or Never.
     - A tool whose name says it sends, posts, forwards or invites is
       Never, and is never offered.
@@ -70,12 +72,32 @@ A Go daemon on lodge's kit (`kit/lodgeapp`, `kit/jsonrpc`,
   read, draft, write in `Porter/`, append to the daily note, or change mail
   and tasks.
 - **The thread store:** SQLite under `/var/lib/frostporter`. It holds
-  turns, tool calls and results, the rolling summary, the full-text index,
-  Activity, and approvals.
-- **The scheduler:** it loads routines from `Porter/Routines/`
-  ([specs/routines.md](../specs/routines.md)) and runs each when it is due.
+  turns with their cards (approvals included), the rolling summary, the
+  full-text index, Activity, and each routine's state.
+- **The scheduler** (`internal/routine`): it loads routines from
+  `Porter/Routines/` ([specs/routines.md](../specs/routines.md)) and runs
+  each when it is due.
+  - It lists the folder every minute, rereading a note whose modified time
+    changed.
+  - It parses each routine strictly. An invalid one is posted once per
+    version and never runs.
+  - It runs each routine through the agent's loop at background priority,
+    with the unattended tools and approvals.
+  - It writes the output note, replacing only its own.
+  - It posts the run's line with its action cards, and records Activity.
+  - SQLite keeps each routine's first-seen and last-run times, for missed
+    runs at start.
 - **The summarizer:** a background job that folds aged turns into the
   rolling summary.
+- **Links in the vault** (`internal/links`): the thread links by lodge
+  address (`/notes/2/Plan.md`, `/mail/message/…`), which it opens through
+  lodge. In a note, a rooted path is a vault path: a click there made a
+  note named `mail/message/…`. So text porterd writes into the vault
+  rewrites those links. This covers routine outputs, notes Porter creates
+  or edits, captures, approvals' appends and memory.
+  - A link to a note becomes a wikilink by its vault path, which notes and
+    Obsidian both resolve.
+  - Any other lodge address becomes an absolute URL under `lodge_url`.
 
 ### A request to the model
 
@@ -138,6 +160,10 @@ Placeholders in {braces} are filled on every request.
 >   first with a search or list tool, and use exactly the id that tool
 >   returned. If several match, ask which.
 > - If a request is ambiguous, ask one short question instead of guessing.
+> - Give times in {owner}'s zone, {timezone}. A time a tool gives with an
+>   offset, such as 09:30:00-04:00, is already the clock time in that
+>   offset: don't shift it. Convert only a time in UTC (ending in Z) or
+>   another zone.
 > - Only say you did something (drafted, captured, created, flagged,
 >   remembered) when a tool call in this reply did it. Earlier replies don't
 >   count: their text is not an action. If no tool can do what was asked,
@@ -203,8 +229,8 @@ the same id, and event `working`.
 ## Operational notes
 
 - **Configuration:** `/etc/porter/porter.json` holds the owner's name, the
-  time zone, the aliases for chat and for routines, and the apps Porter
-  reaches. Unknown keys are refused. Each app's token is kept in
+  time zone, the aliases for chat and for routines, the apps Porter
+  reaches, and `lodge_url`, lodge's https origin. Unknown keys are refused. Each app's token is kept in
   `/var/lib/frostporter/tokens/<app>` (0600). It is set with
   `porterd token set <app>` from stdin, never on the command line, and
   issued with `lodgectl token issue … --agent frostporter`, so it works only

@@ -75,6 +75,14 @@ Status (2026-10-19):
 
 ## Phase 3 — Routines, Activity and Approvals
 
+**Built 2026-10-20** on porter branch `phase3/routines`:
+- the scheduler (`internal/routine`);
+- approval cards for what a routine may not do;
+- `thread.pending` and the `activity` domain;
+- the full app's Activity and Approvals tabs.
+
+What remains is the done-when evidence: a week of briefs, and a review.
+
 - The scheduler, invalid-routine reporting, missed runs, limits and output
   notes ([specs/routines.md](../specs/routines.md)).
 - Activity, and approval cards (`propose`).

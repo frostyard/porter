@@ -183,12 +183,29 @@ func cardError(err error) error {
 	case errors.Is(err, thread.ErrNotFound):
 		return api.Errorf(api.CodeNotFound, "no such card")
 	case errors.Is(err, agent.ErrNotPending):
-		return api.Errorf(api.CodeConflict, "the card is not a pending capture")
+		return api.Errorf(api.CodeConflict, "the card is not pending")
+	case errors.Is(err, agent.ErrBadArgs):
+		return api.Errorf(api.CodeInvalidParams, "%v", err)
 	case errors.Is(err, agent.ErrUnavailable):
 		return api.Errorf(api.CodeUnavailable, "%v", err)
 	}
 	return err
 }
+
+// Pending implements thread.pending.
+func (s *Thread) Pending(ctx context.Context, _ *api.ThreadPendingParams) (*api.TurnList, error) {
+	ts, err := s.store.Pending(ctx, 100)
+	if err != nil {
+		return nil, err
+	}
+	if ts == nil {
+		ts = []api.Turn{}
+	}
+	return &api.TurnList{Turns: ts}, nil
+}
+
+// EmitActivity sends an Activity entry to every subscribed connection.
+func (s *Thread) EmitActivity(e api.Entry) { s.broadcast("activity", e) }
 
 // Subscribe implements thread.subscribe: events reach this connection
 // once the answer has.

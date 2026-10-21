@@ -143,8 +143,9 @@ func (x RPCClient) Ping(ctx context.Context, p *RPCPingParams) error {
 
 // Services is every domain's implementation.
 type Services struct {
-	RPC    RPCService
-	Thread ThreadService
+	RPC      RPCService
+	Thread   ThreadService
+	Activity ActivityService
 }
 
 func (s Services) register(r *Router) error {
@@ -154,11 +155,16 @@ func (s Services) register(r *Router) error {
 	if s.Thread == nil {
 		return errors.New("api: Services.Thread is nil")
 	}
+	if s.Activity == nil {
+		return errors.New("api: Services.Activity is nil")
+	}
 	registerRPC(r, s.RPC)
 	registerThread(r, s.Thread)
+	registerActivity(r, s.Activity)
 	return nil
 }
 
 // Methods is every method the contract defines.
 var Methods = []string{"rpc.hello", "rpc.ping",
-	"thread.list", "thread.send", "thread.search", "thread.confirm", "thread.cancel", "thread.subscribe"}
+	"thread.list", "thread.send", "thread.search", "thread.confirm", "thread.cancel", "thread.pending", "thread.subscribe",
+	"activity.list", "activity.routines"}

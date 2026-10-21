@@ -3,6 +3,7 @@ import {
   applyEvent,
   busy,
   emptyThread,
+  findCard,
   newestPage,
   olderPage,
   patchCard,
@@ -11,7 +12,7 @@ import {
   sendSucceeded,
   subscribed,
 } from "../src/thread";
-import { card, turn } from "./fake";
+import { card, entry, turn } from "./fake";
 
 const ids = (s: { turns: readonly { id: number }[] }) => s.turns.map((t) => t.id);
 
@@ -127,5 +128,17 @@ describe("the turn reducer", () => {
     expect(s.turns[0]?.cards[1]).toMatchObject({ id: "c1", status: "done", text: "y" });
     expect(s.turns[0]?.cards[0]).toBe(before?.cards[0]);
     expect(patchCard(s, "nope", { status: "done" })).toBe(s);
+  });
+
+  it("leaves the thread as it is for an activity entry", () => {
+    const s = newestPage(emptyThread, { turns: [turn(1)], more: false });
+    expect(applyEvent(s, { type: "activity", entry: entry(1, { turn: 1 }) })).toBe(s);
+  });
+
+  it("finds a card in whichever turn holds it", () => {
+    const turns = [turn(1, { cards: [card("t1")] }), turn(2, { cards: [card("a1")] })];
+    const s = newestPage(emptyThread, { turns, more: false });
+    expect(findCard(s, "a1")).toBe(s.turns[1]?.cards[0]);
+    expect(findCard(s, "nope")).toBeUndefined();
   });
 });

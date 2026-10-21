@@ -31,6 +31,7 @@ import (
 	"github.com/frostyard/porter/api"
 	"github.com/frostyard/porter/internal/agent"
 	"github.com/frostyard/porter/internal/config"
+	"github.com/frostyard/porter/internal/routine"
 	"github.com/frostyard/porter/internal/rpcserver"
 	"github.com/frostyard/porter/internal/service"
 	"github.com/frostyard/porter/internal/thread"
@@ -123,7 +124,10 @@ func run(ctx context.Context, args []string) error {
 	ai := inference.New(env, ID)
 	defer ai.Close()
 	ag := &agent.Agent{Store: store, Model: agent.Lodge{C: ai}, Alias: cfg.ChatAlias, Owner: cfg.Owner,
-		Location: loc, Log: log}
+		LodgeURL: cfg.LodgeURL, Location: loc, Log: log}
+	if cfg.LodgeURL == "" {
+		log.Warn("no lodge_url in the configuration: links to mail in notes Porter writes cannot be followed")
+	}
 	var notes *tools.App
 	for _, a := range apps {
 		if a.ID == "notes" {
@@ -139,7 +143,20 @@ func run(ctx context.Context, args []string) error {
 	svc := service.New(ctx, store, ag, log)
 	defer svc.Wait()
 
-	app, err := newApp(log, svc)
+	// Routines need notes, where they live and where their output goes.
+	var routines func(context.Context) ([]api.Routine, error)
+	if notes != nil {
+		sched := &routine.Scheduler{Notes: notes, Agent: ag, Store: store, Location: loc, Model: cfg.RoutineAlias,
+			OnEntry: svc.EmitActivity, Log: log.With("part", "routines")}
+		sched.Start(ctx)
+		defer sched.Wait()
+		defer cancel() // stop the scheduler before waiting for it
+		routines = sched.Routines
+	} else {
+		log.Warn("no notes token: routines cannot run")
+	}
+
+	app, err := newApp(log, svc, service.NewActivity(store, routines))
 	if err != nil {
 		return err
 	}
@@ -183,9 +200,9 @@ type app struct {
 
 // newApp builds the API and the server lodge reaches it through: GET
 // /health, and GET /api, a browser session's JSON-RPC.
-func newApp(log *slog.Logger, threads api.ThreadService) (*app, error) {
+func newApp(log *slog.Logger, threads api.ThreadService, activity api.ActivityService) (*app, error) {
 	rpc := rpcserver.New(rpcserver.Options{Name: "porterd " + version, Logger: log})
-	router, err := api.NewRouter(api.Services{RPC: rpc, Thread: threads})
+	router, err := api.NewRouter(api.Services{RPC: rpc, Thread: threads, Activity: activity})
 	if err != nil {
 		return nil, err
 	}
