@@ -11,12 +11,14 @@ routines in the vault),
 Contracts: [specs/routines.md](../specs/routines.md), and lodge's
 [app contract](https://github.com/frostyard/lodge/blob/main/docs/specs/app-contract.md).
 
-**Status: Phase 2 built on branch `phase2/chat`** (2026-10-20). Built:
+**Status: Phases 2 and 3 built, merged to `main` and deployed on lodge's
+host** (2026-10-21, `73eead0`; the record is in the
+[roadmap's Deployments](../plans/0001-roadmap.md#deployments)). Built:
 - porterd: the thread store, the tool registry over lodge's agent socket,
   the agent loop and the thread API;
-- the companion chat UI.
-Routines, Activity and Approvals are Phase 3 of the
-[roadmap](../plans/0001-roadmap.md).
+- the companion chat UI;
+- routines, Activity and Approvals (the
+  [roadmap](../plans/0001-roadmap.md), Phase 3).
 
 ## Overview
 
