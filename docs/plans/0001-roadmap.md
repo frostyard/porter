@@ -16,8 +16,9 @@ Status (2026-10-21):
 - Phase 5 (reading from frostread) is built before Phase 4, merged
   (porter#7) and deployed (2026-10-21,
   [ADR-0007](../adr/0007-porter-reads-frostread-read-only.md), Accepted).
-  A brief run by hand lists frostread items. The chat half of its
-  done-when check is open.
+  Its done-when is met: a brief run by hand lists frostread items, and
+  chat answers "what is new in my feeds" from Read (OWNER-REPORTED,
+  Brian, 2026-10-21).
 - `main` at `d3db41b` is deployed on lodge's host (2026-10-21). See
   [Deployments](#deployments).
 
@@ -162,7 +163,10 @@ not ([ADR-0007](../adr/0007-porter-reads-frostread-read-only.md)).
   by source with links to `/read/item/<id>`, and chat answers "what is new
   in my feeds?" from Read.
 - **The brief half is met** (2026-10-21, `d3db41b`; see
-  [Deployments](#deployments)). The chat half is open.
+  [Deployments](#deployments)).
+- **Done when is met** (OWNER-REPORTED, Brian, 2026-10-21): Brian asked
+  Porter's chat "what is new in my feeds" on lodge's host, at `d3db41b`,
+  and reported that it worked well.
 
 ## Later / ideas
 
