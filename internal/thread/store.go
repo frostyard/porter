@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS routines (
 	first_seen     TEXT NOT NULL,
 	last_scheduled TEXT NOT NULL DEFAULT '',
 	last_ok        INTEGER,
+	last_success   TEXT NOT NULL DEFAULT '',
 	reported       TEXT NOT NULL DEFAULT ''
 );
 `
@@ -83,6 +84,10 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("thread schema: %w", err)
 	}
+	if err := addLastSuccess(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	s := &Store{db: db, now: time.Now}
 	if _, err := db.ExecContext(ctx, `UPDATE turns SET done = 1,
 		text = CASE WHEN text = '' THEN '(Porter stopped before finishing this reply.)' ELSE text END
@@ -91,6 +96,40 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		return nil, fmt.Errorf("thread recovery: %w", err)
 	}
 	return s, nil
+}
+
+// addLastSuccess adds routines.last_success to a database made before it
+// existed, and fills it from the last run where that run succeeded. The
+// schema has no other migration.
+func addLastSuccess(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, `SELECT name FROM pragma_table_info('routines')`)
+	if err != nil {
+		return fmt.Errorf("routines columns: %w", err)
+	}
+	has := false
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("routines columns: %w", err)
+		}
+		has = has || name == "last_success"
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("routines columns: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("routines columns: %w", err)
+	}
+	if !has {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE routines ADD COLUMN last_success TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add routines.last_success: %w", err)
+		}
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE routines SET last_success = last_scheduled WHERE last_ok = 1 AND last_success = ''`); err != nil {
+		return fmt.Errorf("fill routines.last_success: %w", err)
+	}
+	return nil
 }
 
 // Close closes the database.
@@ -304,6 +343,9 @@ type RoutineState struct {
 	LastScheduled time.Time
 	// LastOK says whether that run succeeded; nil before one.
 	LastOK *bool
+	// LastSuccess is the scheduled time of its last run that succeeded; zero
+	// when none has.
+	LastSuccess time.Time
 	// Reported is the hash of the version whose invalidity the thread was
 	// told of.
 	Reported string
@@ -316,14 +358,15 @@ func (s *Store) SeeRoutine(ctx context.Context, name string, now time.Time) (Rou
 		return RoutineState{}, fmt.Errorf("see routine: %w", err)
 	}
 	var st RoutineState
-	var first, last string
+	var first, last, success string
 	var ok sql.NullBool
-	if err := s.db.QueryRowContext(ctx, `SELECT first_seen, last_scheduled, last_ok, reported FROM routines WHERE name = ?`, name).
-		Scan(&first, &last, &ok, &st.Reported); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT first_seen, last_scheduled, last_ok, last_success, reported FROM routines WHERE name = ?`, name).
+		Scan(&first, &last, &ok, &success, &st.Reported); err != nil {
 		return RoutineState{}, fmt.Errorf("routine state: %w", err)
 	}
 	st.FirstSeen, _ = time.Parse(time.RFC3339, first)
 	st.LastScheduled, _ = time.Parse(time.RFC3339, last)
+	st.LastSuccess, _ = time.Parse(time.RFC3339, success)
 	if ok.Valid {
 		st.LastOK = &ok.Bool
 	}
@@ -331,8 +374,10 @@ func (s *Store) SeeRoutine(ctx context.Context, name string, now time.Time) (Rou
 }
 
 // SetRan records a routine's run scheduled at t, and whether it succeeded.
+// Only a success replaces the time of the last success.
 func (s *Store) SetRan(ctx context.Context, name string, t time.Time, ok bool) error {
-	if _, err := s.db.ExecContext(ctx, `UPDATE routines SET last_scheduled = ?, last_ok = ? WHERE name = ?`,
+	if _, err := s.db.ExecContext(ctx, `UPDATE routines SET last_scheduled = ?1, last_ok = ?2,
+		last_success = CASE WHEN ?2 THEN ?1 ELSE last_success END WHERE name = ?3`,
 		t.UTC().Format(time.RFC3339), ok, name); err != nil {
 		return fmt.Errorf("record run: %w", err)
 	}

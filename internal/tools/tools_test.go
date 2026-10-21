@@ -149,3 +149,114 @@ func TestOwnTools(t *testing.T) {
 		t.Fatalf("own call = %+v %v", res, err)
 	}
 }
+
+type idIn struct {
+	ID int64 `json:"id" jsonschema:"the article's id"`
+}
+
+type articleOut struct {
+	ID    int64  `json:"id"`
+	Title string `json:"title"`
+	URL   string `json:"url"`
+}
+
+// fakeRead serves an MCP server like frostread's: 4 read tools, 3 write
+// tools, and a tool Porter does not know, which claims to be read-only.
+func fakeRead(t *testing.T) *httptest.Server {
+	t.Helper()
+	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
+		s := mcp.NewServer(&mcp.Implementation{Name: "fake-read"}, nil)
+		reads := &mcp.ToolAnnotations{ReadOnlyHint: true}
+		art := func(_ context.Context, _ *mcp.CallToolRequest, in idIn) (*mcp.CallToolResult, articleOut, error) {
+			return nil, articleOut{ID: in.ID, Title: "A post", URL: "https://blog.example/post"}, nil
+		}
+		for _, n := range []string{"list_sources", "list_unread", "search", "read_item", "future_read"} {
+			mcp.AddTool(s, &mcp.Tool{Name: n, Description: n, Annotations: reads}, art)
+		}
+		for _, n := range []string{"save_url", "mark_read", "star"} {
+			mcp.AddTool(s, &mcp.Tool{Name: n, Description: n}, art)
+		}
+		return s
+	}, nil)
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestFrostreadIsReadOnly(t *testing.T) {
+	srv := fakeRead(t)
+	a := &App{ID: "read", Endpoint: srv.URL, HTTP: http.DefaultClient, Version: "test"}
+	t.Cleanup(a.Close)
+	ts, err := a.Tools(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, tl := range ts {
+		got = append(got, tl.Tool)
+		if tl.Kind != Read || !tl.Kind.Unattended() {
+			t.Errorf("%s = %v, want Read and unattended", tl.Name, tl.Kind)
+		}
+	}
+	if want := "list_sources list_unread read_item search"; strings.Join(got, " ") != want {
+		t.Errorf("offered %v, want %s", got, want)
+	}
+	// A call by name is refused too, for chat and for routines.
+	r := NewRegistry(nil, []*App{a})
+	for _, name := range []string{"read__save_url", "read__mark_read", "read__star", "read__future_read"} {
+		for _, unattended := range []bool{false, true} {
+			if _, res, err := r.Call(t.Context(), name, map[string]any{"id": 1}, unattended); err != nil || !res.Error {
+				t.Errorf("%s = %+v %v, want a tool error", name, res, err)
+			}
+		}
+	}
+}
+
+func TestClassifyReadApp(t *testing.T) {
+	for name, want := range map[string]Kind{
+		"list_sources": Read, "list_unread": Read, "search": Read, "read_item": Read,
+		"save_url": Never, "mark_read": Never, "star": Never,
+		"future_read": Never, "write_anything": Never,
+	} {
+		// Even a tool that claims to be read-only is Never when it is unknown.
+		tl := &mcp.Tool{Name: name, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}
+		if got := Classify("read", tl); got != want {
+			t.Errorf("Classify(read, %s) = %v, want %v", name, got, want)
+		}
+	}
+}
+
+func TestFrostreadCardLinksTheReader(t *testing.T) {
+	srv := fakeRead(t)
+	a := &App{ID: "read", Endpoint: srv.URL, HTTP: http.DefaultClient, Version: "test"}
+	t.Cleanup(a.Close)
+	r := NewRegistry(nil, []*App{a})
+	_, res, err := r.Call(t.Context(), "read__read_item", map[string]any{"id": 42}, true)
+	if err != nil || res.Error || res.URL != "/read/item/42" {
+		t.Fatalf("read_item = %+v %v, want the lodge address", res, err)
+	}
+	if !strings.Contains(res.Text, "https://blog.example/post") {
+		t.Errorf("the model lost the article's web address: %s", res.Text)
+	}
+	// Other tools of the app give no link, though their result has a url.
+	_, res, err = r.Call(t.Context(), "read__search", map[string]any{"id": 42}, true)
+	if err != nil || res.Error || res.URL != "" {
+		t.Errorf("search URL = %q (%v), want none", res.URL, err)
+	}
+}
+
+func TestResultURL(t *testing.T) {
+	for _, c := range []struct{ app, tool, in, want string }{
+		{"notes", "read_note", `{"path":"a","url":"/notes/1/a"}`, "/notes/1/a"},
+		// mail's ids are strings: they must not hide the url.
+		{"mail", "read_thread", `{"id":"m-1","url":"/mail/message/m-1"}`, "/mail/message/m-1"},
+		{"read", "read_item", `{"id":7,"url":"https://x.example/"}`, "/read/item/7"},
+		{"read", "read_item", `{"url":"https://x.example/"}`, ""},
+		{"read", "list_unread", `{"id":7,"url":"https://x.example/"}`, ""},
+		{"read", "read_item", `[1]`, ""},
+	} {
+		if got := resultURL(c.app, c.tool, []byte(c.in)); got != c.want {
+			t.Errorf("resultURL(%s, %s, %s) = %q, want %q", c.app, c.tool, c.in, got, c.want)
+		}
+	}
+}

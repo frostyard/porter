@@ -1,6 +1,7 @@
 package thread
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -169,6 +170,79 @@ func TestActivityAndRoutineState(t *testing.T) {
 	again, _ := s.SeeRoutine(ctx, "Morning brief", time.Now())
 	if !again.FirstSeen.Equal(st.FirstSeen) || !again.LastScheduled.Equal(ran) || again.LastOK == nil || !*again.LastOK || again.Reported != "h1" {
 		t.Fatalf("the state after a run = %+v", again)
+	}
+}
+
+func TestLastSuccessIsKeptThroughFailures(t *testing.T) {
+	s := open(t)
+	ctx := t.Context()
+	st, err := s.SeeRoutine(ctx, "Morning brief", time.Now())
+	if err != nil || !st.LastSuccess.IsZero() {
+		t.Fatalf("a new routine's state = %+v, %v", st, err)
+	}
+	// A failure before any success leaves none.
+	d1 := time.Date(2026, 10, 19, 7, 0, 0, 0, time.UTC)
+	d2 := d1.Add(24 * time.Hour)
+	d3 := d2.Add(24 * time.Hour)
+	if err := s.SetRan(ctx, "Morning brief", d1, false); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ = s.SeeRoutine(ctx, "Morning brief", time.Now()); !st.LastSuccess.IsZero() || !st.LastScheduled.Equal(d1) {
+		t.Fatalf("after a first failure = %+v", st)
+	}
+	if err := s.SetRan(ctx, "Morning brief", d2, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetRan(ctx, "Morning brief", d3, false); err != nil {
+		t.Fatal(err)
+	}
+	st, _ = s.SeeRoutine(ctx, "Morning brief", time.Now())
+	if !st.LastSuccess.Equal(d2) || !st.LastScheduled.Equal(d3) || st.LastOK == nil || *st.LastOK {
+		t.Fatalf("a failure after a success = %+v, want the success kept at %v", st, d2)
+	}
+}
+
+func TestOpenAddsLastSuccessToAnOldDatabase(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "thread.db")
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The routines table as it was before last_success.
+	for _, q := range []string{
+		`CREATE TABLE routines (
+			name           TEXT PRIMARY KEY,
+			first_seen     TEXT NOT NULL,
+			last_scheduled TEXT NOT NULL DEFAULT '',
+			last_ok        INTEGER,
+			reported       TEXT NOT NULL DEFAULT ''
+		)`,
+		`INSERT INTO routines (name, first_seen, last_scheduled, last_ok) VALUES ('Good', '2026-10-01T00:00:00Z', '2026-10-20T07:00:00Z', 1)`,
+		`INSERT INTO routines (name, first_seen, last_scheduled, last_ok) VALUES ('Bad', '2026-10-01T00:00:00Z', '2026-10-20T07:00:00Z', 0)`,
+		`INSERT INTO routines (name, first_seen) VALUES ('Never', '2026-10-01T00:00:00Z')`,
+	} {
+		if _, err := db.ExecContext(t.Context(), q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 { // the second open finds the column already there
+		s, err := Open(t.Context(), path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		good, _ := s.SeeRoutine(t.Context(), "Good", time.Now())
+		bad, _ := s.SeeRoutine(t.Context(), "Bad", time.Now())
+		never, _ := s.SeeRoutine(t.Context(), "Never", time.Now())
+		want := time.Date(2026, 10, 20, 7, 0, 0, 0, time.UTC)
+		if !good.LastSuccess.Equal(want) || !bad.LastSuccess.IsZero() || !never.LastSuccess.IsZero() {
+			t.Fatalf("backfill: good %v, bad %v, never %v", good.LastSuccess, bad.LastSuccess, never.LastSuccess)
+		}
+		if err := s.Close(); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

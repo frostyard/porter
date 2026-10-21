@@ -59,7 +59,8 @@ repositories do, read their file.
 
 ## Invariants (decided; binding from the first line of code)
 
-- **Porter owns no data.** It reaches mail, calendar, tasks and notes only
+- **Porter owns no data.** It reaches mail, calendar, tasks, notes and reading (read-only,
+  [ADR-0007](docs/adr/0007-porter-reads-frostread-read-only.md)) only
   through each app's `/mcp/<id>` with that app's token, over lodge's agent
   socket. It never reads another app's files or database
   ([ADR-0003](docs/adr/0003-porter-is-a-lodge-app-that-owns-no-data.md)).
