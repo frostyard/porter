@@ -228,6 +228,13 @@ domain (`schema/rpc/thread.yaml`): `list`, `send`, `search`, `confirm`,
 in the kit's envelope: event `turn` with a turn, which replaces a turn of
 the same id, and event `working`.
 
+It reaches porterd's API at `/app/porter/api` through
+`@frostyard/lodge-client/rpc` (`client/v0.3.1`), in `web/src/connection.ts`:
+`rpc.hello` first, a ping every 30 s while the page is visible, and a
+reconnect after a drop only while it is visible. Porter's own part is small.
+It runs `onReady` after each `rpc.hello`, retries a first attempt that fails,
+and stops on a protocol mismatch.
+
 - **The companion** is the thread and an input. Context chips show what the
   current app reported. Tool calls and actions appear as cards: what it did,
   with a link and an undo where the app has one. Approvals are cards with
