@@ -6,7 +6,7 @@ GitHub manager. It is
 lodge's roadmap Phase 5 (the assistant) carried into a build, and it waits
 on that phase's lodge work.
 
-Status (2026-10-21):
+Status (2026-10-22):
 - Phase 0 is done.
 - The founding documents (ADRs 0003 to 0006, the design doc and
   [specs/routines.md](../specs/routines.md)) are Proposed.
@@ -20,7 +20,9 @@ Status (2026-10-21):
   chat answers "what is new in my feeds" from Read (OWNER-REPORTED,
   Brian, 2026-10-21).
 - `main` at `d3db41b` is deployed on lodge's host (2026-10-21). See
-  [Deployments](#deployments).
+  [Deployments](#deployments). The later merges have no deploy record:
+  porter#10 to porter#13 pin `@frostyard/lodge-ui` `ui/v0.5.0` and move the
+  web bundle to lodge-client's `rpc` subpath at `client/v0.3.2`.
 
 ## Deployments
 
