@@ -3,7 +3,7 @@
 // lodge-client, then to porterd's API at /app/porter/api.
 import { connectLodge } from "@frostyard/lodge-client";
 import { App } from "./app";
-import { Connection } from "./rpc";
+import { Connection } from "./connection";
 
 const lodge = await connectLodge({ app: "porter" });
 
@@ -19,9 +19,7 @@ const conn = new Connection({
   onReady: () => void app?.connected(),
   onClose: () => app?.disconnected(),
   onFailure: (message) => app?.failed(`Porter can't connect: ${message}`),
-  onNotification: (method, params) => {
-    if (method === "event") app?.event(params);
-  },
+  onEvent: (params) => app?.event(params),
 });
 app = new App({ root, transport: conn, shell: { role: lodge.role, open: (url) => lodge.open(url) } });
 
@@ -46,12 +44,9 @@ lodge.on("navigate", ({ route }) => lodge.route(route, "", { replace: true }));
 
 conn.connect();
 
-// lodge closes a session after 90 s without a frame: send one every 30 s
-// while the page is visible, and reconnect when it is visible again
-// (lodge's app-contract.md, Sessions).
-setInterval(() => {
-  if (visible()) conn.ping();
-}, 30_000);
+// lodge-client pings every 30 s while the page is visible, so lodge keeps the
+// session (it closes one after 90 s without a frame). Connect when the page is
+// visible again.
 document.addEventListener("visibilitychange", () => {
   if (visible()) conn.connect();
 });
