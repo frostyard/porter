@@ -229,11 +229,14 @@ in the kit's envelope: event `turn` with a turn, which replaces a turn of
 the same id, and event `working`.
 
 It reaches porterd's API at `/app/porter/api` through
-`@frostyard/lodge-client/rpc` (`client/v0.3.1`), in `web/src/connection.ts`:
-`rpc.hello` first, a ping every 30 s while the page is visible, and a
-reconnect after a drop only while it is visible. Porter's own part is small.
-It runs `onReady` after each `rpc.hello`, retries a first attempt that fails,
-and stops on a protocol mismatch.
+`@frostyard/lodge-client/rpc` (0.3.2, pinned to lodge's `client/hello-error-code`
+commit until `client/v0.3.2` is tagged), in `web/src/connection.ts`:
+`rpc.hello` first, a ping every 30 s while the page is visible, a socket
+whose ping goes unanswered in 10 s closed as dropped, and a reconnect after
+a drop only while it is visible. Porter's own part is small. It runs
+`onReady` after each `rpc.hello`, retries a first attempt that fails, and
+stops on a protocol mismatch: the client rejects a failed `rpc.hello` with
+that call's own `RPCError`, so Porter reads the code it keeps.
 
 - **The companion** is the thread and an input. Context chips show what the
   current app reported. Tool calls and actions appear as cards: what it did,

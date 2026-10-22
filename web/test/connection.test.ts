@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Code, errorCode, RpcError } from "../src/api";
-import { Connection, PROTOCOL } from "../src/connection";
+import { Connection, PING_TIMEOUT_MS, PROTOCOL } from "../src/connection";
 
 /** A WebSocket the test drives: it opens, answers and closes when told. */
 class FakeSocket {
@@ -120,6 +120,24 @@ describe("Connection", () => {
     await ready(0);
     await vi.advanceTimersByTimeAsync(30_000);
     expect(socket(0).sent[1]).toMatchObject({ method: "rpc.ping" });
+  });
+
+  it("closes a socket whose ping goes unanswered for 10 s, and connects again", async () => {
+    expect(PING_TIMEOUT_MS).toBe(10_000);
+    const { conn, socket, ready, onClose, onFailure } = setup();
+    conn.connect();
+    await ready(0);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(socket(0).sent[1]).toMatchObject({ method: "rpc.ping" });
+    // No answer: the socket is dead, and the client closes it.
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(socket(0).closed).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(socket(0).closed).toBe(true);
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(onFailure).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(FakeSocket.all).toHaveLength(2);
   });
 
   it("fails pending calls with Code.disconnected when the socket closes, and connects again when asked", async () => {

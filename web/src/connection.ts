@@ -1,6 +1,7 @@
 // The connection to porterd's API: @frostyard/lodge-client/rpc's
 // connectLodgeAPI over lodge's /app/porter/api WebSocket (rpc.hello first,
-// rpc.ping every 30 s while the page is visible), as a Transport for the UI.
+// rpc.ping every 30 s while the page is visible, and a ping unanswered in
+// 10 s), as a Transport for the UI.
 //
 // Connection adds what Porter needs on top of it:
 // - it owns reconnecting, so the UI runs onReady after every rpc.hello
@@ -8,7 +9,9 @@
 //   the client's connection is closed and a new one made, after a growing
 //   delay (1 s, doubling to 30 s), and only while the page is visible;
 // - it retries a first attempt that fails, which the client does not;
-// - a protocol mismatch in rpc.hello stops it, and onFailure says why;
+// - a protocol mismatch in rpc.hello stops it, and onFailure says why: the
+//   client rejects a failed rpc.hello with that call's own RPCError, so
+//   Porter reads its code (client 0.3.2, which stopped losing it);
 // - it keeps api.ts's errors: Code.disconnected for a call made without a
 //   connection, and RpcError with the daemon's code.
 
@@ -20,6 +23,15 @@ export const PROTOCOL = 1;
 
 const MAX_BACKOFF = 30_000;
 const FIRST_BACKOFF = 1000;
+
+/**
+ * PING_TIMEOUT_MS is how long a ping may go unanswered before the socket is
+ * closed as dropped. Lodge ends a session after 90 s without a frame, so the
+ * page pings every 30 s; a phone that sleeps drops a connection without a
+ * close, and a ping unanswered in 10 s means the socket is dead, so the
+ * client closes it, and the reconnect runs.
+ */
+export const PING_TIMEOUT_MS = 10_000;
 
 export interface ConnectionOptions {
   /** The API's URL, read on every connect: lodge.apiURL(). */
@@ -39,34 +51,6 @@ export interface ConnectionOptions {
   /** The WebSocket constructor and the document the client uses; the browser's by default. */
   webSocket?: typeof WebSocket;
   document?: VisibilityDocument;
-}
-
-interface HelloFailure {
-  code: number;
-  message: string;
-}
-
-/**
- * helloFailure reads an error answer out of a frame. The client turns an
- * rpc.hello failure into a plain Error, so the code that says a protocol
- * mismatch is read here, from the first error answer on a socket (rpc.hello
- * is the only call before the connection is ready).
- */
-function helloFailure(data: unknown): HelloFailure | null {
-  for (const line of String(data).split("\n")) {
-    if (line.trim() === "") continue;
-    let m: { id?: unknown; error?: { code?: unknown; message?: unknown } | null };
-    try {
-      m = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (typeof m !== "object" || m === null || typeof m.id !== "number") continue;
-    const e = m.error;
-    if (typeof e !== "object" || e === null) continue;
-    return { code: typeof e.code === "number" ? e.code : Code.internal, message: typeof e.message === "string" ? e.message : "error" };
-  }
-  return null;
 }
 
 /** disconnected is what a call fails with when there is no connection. */
@@ -104,21 +88,12 @@ export class Connection implements Transport {
     clearTimeout(this.#retry);
     this.#retry = undefined;
     this.#active = true;
-    let failure: HelloFailure | null = null;
-    const Base = this.#o.webSocket ?? WebSocket;
-    class Sniffing extends Base {
-      constructor(url: string | URL) {
-        super(url);
-        this.addEventListener("message", (e) => {
-          failure ??= helloFailure(e.data);
-        });
-      }
-    }
     connectLodgeAPI(
       { apiURL: this.#o.url },
       {
-        webSocket: Sniffing,
+        webSocket: this.#o.webSocket,
         hello: { protocol: PROTOCOL, client: this.#o.client },
+        pingTimeoutMs: PING_TIMEOUT_MS,
         ...(this.#o.document === undefined ? {} : { document: this.#o.document }),
       },
     ).then(
@@ -137,11 +112,16 @@ export class Connection implements Transport {
         });
         this.#o.onReady();
       },
-      () => {
+      (err: unknown) => {
         this.#active = false;
-        if (failure !== null) {
-          if (failure.code === Code.protocolMismatch) this.#stopped = true;
-          this.#o.onFailure?.(failure.message);
+        // A failed rpc.hello rejects with its own RPCError (rpc.hello is the
+        // only call before the connection is ready): its code says whether
+        // the page and porterd speak one protocol, and its message is the
+        // daemon's. A plain Error is a socket that never opened, which says
+        // nothing new of the daemon.
+        if (err instanceof RPCError) {
+          if (err.code === Code.protocolMismatch) this.#stopped = true;
+          this.#o.onFailure?.(err.message);
         }
         this.#o.onClose();
         this.#scheduleRetry();
