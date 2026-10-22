@@ -17,11 +17,17 @@ the canonical paths, and keep content tool-agnostic.
 
 ## Status
 
-Pre-release, local only (not yet on GitHub). The repository holds lodge's
-app scaffold (`porterd`, on lodge's kit `v0.1.0`) and the founding
-documents, which are Proposed (2026-10-19). Nothing of Porter's own is
-built yet. The order of work is the [roadmap](docs/plans/0001-roadmap.md).
-Phase 1 is lodge's and the apps' work, in
+Pre-release, public on GitHub. Phases 0, 1, 2, 3 and 5 of the
+[roadmap](docs/plans/0001-roadmap.md) are built: chat in the companion,
+routines with Activity and Approvals, and reading from frostread. Phase 4,
+the GitHub manager, waits for that app. The done-when checks of Phases 2
+and 3 are still open. `main` at `d3db41b` is deployed on lodge's host
+(2026-10-21); the roadmap's Deployments table records each deploy. porterd
+is on lodge's kit `v0.2.0`, and the web bundle on `@frostyard/lodge-client`
+`client/v0.3.2` and `@frostyard/lodge-ui` `ui/v0.5.0`. ADR-0007 is Accepted
+(Brian, 2026-10-21); ADRs 0001 to 0006, the design doc and the routines
+spec are Proposed.
+Phase 1 was lodge's and the apps' work, in
 [frostyard/lodge](https://github.com/frostyard/lodge),
 [frostyard/frostnotes](https://github.com/frostyard/frostnotes) and
 [frostyard/frostmail](https://github.com/frostyard/frostmail), which are
@@ -35,17 +41,26 @@ repositories do, read their file.
   (kittest).
 - `api/`, `internal/rpcserver`: its JSON-RPC API on `kit/jsonrpc`.
   `schema/rpc` is the contract, and `api/rpc.go` follows it by hand.
-- `web/`: the web bundle on `@frostyard/lodge-client`.
+- `internal/thread`: the one continuous thread
+  ([ADR-0006](docs/adr/0006-one-continuous-thread.md)): its turns, their
+  full-text index and the rolling summary, in porterd's own SQLite database.
+- `internal/tools`: the tool registry over lodge's agent socket; each tool
+  is marked by what it may do
+  ([ADR-0004](docs/adr/0004-porter-drafts-and-the-owner-sends.md)).
+- `internal/agent`: the agent loop: the system prompt, the owner's memory,
+  the summary and the recent turns, the tools, and the reply's cards.
+- `internal/service`: the thread domain over the agent and the store.
+- `internal/routine`: the scheduler for routines, and Activity
+  ([specs/routines.md](docs/specs/routines.md)).
+- `internal/links`: the links in text that Porter writes into the vault.
+- `internal/config`: `/etc/porter/porter.json` and the state directory.
+- `web/`: the companion and the full app (the thread, cards, Activity and
+  Approvals), on `@frostyard/lodge-client` and `@frostyard/lodge-ui`.
 - `packaging/lodge`: the manifest, the socket and service units, the system
   user, and `stage.sh`.
 - `.github/workflows/ci.yml`: CI, the jobs of `make ci`.
   `internal/workflowcheck` tests that its actions are SHA-pinned with least
   privilege (frostyard/core ADR-0021).
-- Planned (see the design doc):
-  - the agent loop and tool registry;
-  - the thread store;
-  - the scheduler for routines;
-  - the companion UI.
 
 ## Gates
 

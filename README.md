@@ -5,8 +5,9 @@ The owner's personal assistant inside
 beside whatever app you are in. It reads your mail, calendar, tasks and
 notes through their MCP endpoints, drafts but never sends, keeps its memory
 and its scheduled prompts (routines) as notes in your vault, and thinks
-through lodge's inference layer. Pre-release: the design is in
-[docs/](docs/README.md), and the code is lodge's app scaffold so far.
+through lodge's inference layer. Pre-release: chat, routines and reading
+from frostread are built and run on lodge's host. The design is in
+[docs/](docs/README.md).
 
 lodge's `porter` app: the `porterd` daemon, on the app socket lodge
 reaches it through, and its web bundle, which lodge serves at
@@ -20,7 +21,8 @@ on [lodge's kit](https://github.com/frostyard/lodge/tree/main/kit) and
 | `cmd/porterd` | the daemon, with the contract's socket rules as tests (kittest) |
 | `api`, `internal/rpcserver` | its JSON-RPC API, on `kit/jsonrpc` |
 | `schema/rpc` | the API's contract; `api/rpc.go` follows it by hand |
-| `web` | the web bundle, on `@frostyard/lodge-client` |
+| `internal/…` | the thread store, the tool registry, the agent loop and the routine scheduler (see `AGENTS.md`'s map) |
+| `web` | the companion and the full app, on `@frostyard/lodge-client` and `@frostyard/lodge-ui` |
 | `packaging/lodge` | the manifest, the socket and service units, the system user, and `stage.sh` |
 
 - `make check` formats, vets and tests the daemon.
