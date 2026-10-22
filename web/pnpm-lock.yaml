@@ -167,8 +167,8 @@ importers:
   .:
     dependencies:
       '@frostyard/lodge-client':
-        specifier: github:frostyard/lodge#c3c37b4fcf9880ae4f5f1ea365e89b8bc0b6cf00&path:client
-        version: https://codeload.github.com/frostyard/lodge/tar.gz/c3c37b4fcf9880ae4f5f1ea365e89b8bc0b6cf00#path:client
+        specifier: github:frostyard/lodge#client/v0.3.2&path:client
+        version: https://codeload.github.com/frostyard/lodge/tar.gz/9a3aa0de68705b81a2d28c49a0aba73e78be2163#path:client
       '@frostyard/lodge-ui':
         specifier: github:frostyard/lodge#ui/v0.5.0&path:ui
         version: https://codeload.github.com/frostyard/lodge/tar.gz/43d40b70b864618af8f24c690121a0a64ed4cac2#path:ui
@@ -194,8 +194,8 @@ packages:
   '@fontsource-variable/inter@5.3.0':
     resolution: {integrity: sha512-OupL48va4JNofb97w6NYeF9S7W/kHNKM0Er8Dem5nqi4jeOLrVJDoE8tZEpnMJmtkvNbB1EIPPwHcdkF6b1oUA==}
 
-  '@frostyard/lodge-client@https://codeload.github.com/frostyard/lodge/tar.gz/c3c37b4fcf9880ae4f5f1ea365e89b8bc0b6cf00#path:client':
-    resolution: {gitHosted: true, integrity: sha512-KN56FkmXMt9F5naSReOyLBBwYoLbfgb3iI7pZH0UtZghDglcc5GBR1JQwy3MQZSA8c5hi9LepaHoly5bWHZ/hw==, path: client, tarball: https://codeload.github.com/frostyard/lodge/tar.gz/c3c37b4fcf9880ae4f5f1ea365e89b8bc0b6cf00}
+  '@frostyard/lodge-client@https://codeload.github.com/frostyard/lodge/tar.gz/9a3aa0de68705b81a2d28c49a0aba73e78be2163#path:client':
+    resolution: {gitHosted: true, integrity: sha512-wUS44G6ORpC4skd4Juk6lK+sckDaF/K/pB5N8a1cf1Et2wgA7/OZ2hNMsAqGO4uum4kFeFSrR6KxkFjkE4i+WA==, path: client, tarball: https://codeload.github.com/frostyard/lodge/tar.gz/9a3aa0de68705b81a2d28c49a0aba73e78be2163}
     version: 0.3.2
 
   '@frostyard/lodge-ui@https://codeload.github.com/frostyard/lodge/tar.gz/43d40b70b864618af8f24c690121a0a64ed4cac2#path:ui':
@@ -768,7 +768,7 @@ snapshots:
 
   '@fontsource-variable/inter@5.3.0': {}
 
-  '@frostyard/lodge-client@https://codeload.github.com/frostyard/lodge/tar.gz/c3c37b4fcf9880ae4f5f1ea365e89b8bc0b6cf00#path:client': {}
+  '@frostyard/lodge-client@https://codeload.github.com/frostyard/lodge/tar.gz/9a3aa0de68705b81a2d28c49a0aba73e78be2163#path:client': {}
 
   '@frostyard/lodge-ui@https://codeload.github.com/frostyard/lodge/tar.gz/43d40b70b864618af8f24c690121a0a64ed4cac2#path:ui':
     dependencies:
