@@ -229,8 +229,7 @@ in the kit's envelope: event `turn` with a turn, which replaces a turn of
 the same id, and event `working`.
 
 It reaches porterd's API at `/app/porter/api` through
-`@frostyard/lodge-client/rpc` (0.3.2, pinned to lodge's `client/hello-error-code`
-commit until `client/v0.3.2` is tagged), in `web/src/connection.ts`:
+`@frostyard/lodge-client/rpc` (`client/v0.3.2`), in `web/src/connection.ts`:
 `rpc.hello` first, a ping every 30 s while the page is visible, a socket
 whose ping goes unanswered in 10 s closed as dropped, and a reconnect after
 a drop only while it is visible. Porter's own part is small. It runs
