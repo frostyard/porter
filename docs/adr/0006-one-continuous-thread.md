@@ -1,6 +1,6 @@
 # 0006 — One continuous thread
 
-- **Status:** Proposed
+- **Status:** Accepted (Brian, 2026-10-23)
 - **Date:** 2026-10-19
 
 ## Context
