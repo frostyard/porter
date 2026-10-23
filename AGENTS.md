@@ -23,8 +23,8 @@ routines with Activity and Approvals, and reading from frostread. Phase 4,
 the GitHub manager, waits for that app. The done-when checks of Phases 2
 and 3 are still open. `main` at `d3db41b` is deployed on lodge's host
 (2026-10-21); the roadmap's Deployments table records each deploy. porterd
-is on lodge's kit `v0.2.0`, and the web bundle on `@frostyard/lodge-client`
-`client/v0.3.2` and `@frostyard/lodge-ui` `ui/v0.5.0`. ADR-0007 is Accepted
+is on lodge's kit `v0.3.0`, and the web bundle on `@frostyard/lodge-client`
+`client/v0.3.2` and `@frostyard/lodge-ui` `ui/v0.6.0`. ADR-0007 is Accepted
 (Brian, 2026-10-21); ADRs 0001 to 0006, the design doc and the routines
 spec are Proposed.
 Phase 1 was lodge's and the apps' work, in
