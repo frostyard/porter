@@ -25,8 +25,8 @@ and 3 are still open. `main` at `d3db41b` is deployed on lodge's host
 (2026-10-21); the roadmap's Deployments table records each deploy. porterd
 is on lodge's kit `v0.3.0`, and the web bundle on `@frostyard/lodge-client`
 `client/v0.3.2` and `@frostyard/lodge-ui` `ui/v0.6.0`. ADR-0007 is Accepted
-(Brian, 2026-10-21); ADRs 0001 to 0006, the design doc and the routines
-spec are Proposed.
+(Brian, 2026-10-21), and ADRs 0001 to 0006 are Accepted (Brian,
+2026-10-23); the design doc and the routines spec are Proposed.
 Phase 1 was lodge's and the apps' work, in
 [frostyard/lodge](https://github.com/frostyard/lodge),
 [frostyard/frostnotes](https://github.com/frostyard/frostnotes) and
