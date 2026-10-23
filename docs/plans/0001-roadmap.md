@@ -8,8 +8,9 @@ on that phase's lodge work.
 
 Status (2026-10-22):
 - Phase 0 is done.
-- The founding documents (ADRs 0003 to 0006, the design doc and
-  [specs/routines.md](../specs/routines.md)) are Proposed.
+- ADRs 0001 to 0007 are Accepted (0001 to 0006 by Brian, 2026-10-23).
+  The design doc and [specs/routines.md](../specs/routines.md) are
+  Proposed.
 - Phase 1 is built and checked on lodge's host (2026-10-19).
 - Phases 2 and 3 are built and merged to `main` (porter#1 and porter#2,
   2026-10-21). Their done-when checks are still open.
@@ -26,8 +27,7 @@ Status (2026-10-22):
 
 ## Deployments
 
-Porter runs on lodge's host, the Incus VM `frostnotes-hub`, as lodge's
-`porter` app.
+Porter runs on lodge's host, an Incus VM, as lodge's `porter` app.
 
 | Date | Version | What | Checked live |
 |------|---------|------|--------------|
@@ -103,7 +103,7 @@ How the host differs from `make lodge-package`'s layout:
   `remember`, used only when asked.
 - The companion UI: the thread, context chips, action cards with undo, and
   capture's confirm-then-append.
-- `porterd token set <app>`, and `/etc/porter/porter.toml`.
+- `porterd token set <app>`, and `/etc/porter/porter.json`.
 - **Done when,** on the owner's phone and desktop, through lodge:
   - "what did Iris ask me about Saturday?" answers with a link;
   - "draft a yes" leaves a draft, and nothing is sent;
