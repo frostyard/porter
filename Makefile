@@ -1,4 +1,4 @@
-.PHONY: help build fmt vet lint lint-version-check test race tidy-check verify check ci web-build web-check lodge-package clean
+.PHONY: help build fmt vet lint lint-version-check test race tidy-check verify check ci web-build web-check lodge-package vulncheck clean
 
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
@@ -39,6 +39,12 @@ verify: tidy-check vet lint test ## The gate without formatting: tidy, vet, lint
 check: fmt verify ## Format, then verify
 
 ci: verify race web-check ## verify, the race detector, and the web bundle's checks (nsl)
+
+# govulncheck's release, pinned here and not in go.mod (it needs the network).
+GOVULNCHECK_VERSION := v1.9.0
+
+vulncheck: ## Report reachable vulnerabilities (govulncheck; needs the network)
+	go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
 # The web bundle builds in an nsl machine with Node (lodge's
 # dev/nsl/provision.sh), never on the host, for lodge's /app/porter/.

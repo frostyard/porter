@@ -2,6 +2,8 @@ module github.com/frostyard/porter
 
 go 1.27.0
 
+toolchain go1.27.3
+
 require (
 	github.com/frostyard/lodge/kit v0.3.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0

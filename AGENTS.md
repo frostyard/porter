@@ -69,7 +69,9 @@ repositories do, read their file.
 - `make web-build` builds the bundle in an nsl machine. Never run pnpm, node
   or cargo on the host.
 - `make ci` is `make verify`, `make race` and `make web-check` (nsl). CI runs
-  the same targets on every pull request and push to `main`.
+  the same targets on every pull request and push to `main`, plus its
+  `vulncheck` job (`make vulncheck`: govulncheck, pinned in the Makefile; it
+  needs the network, so no gate runs it). Keep it at 0 reachable findings.
 - `make lodge-package` stages Porter in lodge's install layout.
 
 ## Invariants (decided; binding from the first line of code)
