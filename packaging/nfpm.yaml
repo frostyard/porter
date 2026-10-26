@@ -12,7 +12,7 @@ description: |-
   Porter, the owner's personal assistant, for lodge.
   The porterd daemon, the Porter app's manifest and web bundle, its systemd
   units and its sysusers.d entry. It runs as lodge's porter app. Built for
-  Snosi's sysext (ADR-0058).
+  Snosi's sysext porterd (core ADR-0058).
 vendor: frostyard
 homepage: https://github.com/frostyard/porter
 license: MIT
