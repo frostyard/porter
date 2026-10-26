@@ -58,10 +58,13 @@ repositories do, read their file.
   Approvals), on `@frostyard/lodge-client` and `@frostyard/lodge-ui`.
 - `packaging/lodge`: the manifest, the socket and service units, the system
   user, and `stage.sh`. `stage.sh` writes only under `usr/` (core ADR-0058);
-  `internal/packagecheck` tests the staged tree and its units.
-- `.github/workflows/ci.yml`: CI, the jobs of `make ci`.
-  `internal/workflowcheck` tests that its actions are SHA-pinned with least
-  privilege (frostyard/core ADR-0021).
+  `internal/packagecheck` tests the staged tree and its units. `make deb`
+  builds the release `.deb` with nFPM (`packaging/nfpm.yaml`, checked by
+  `packaging/deb-check.py`); `make bump` tags a release.
+- `.github/workflows/`: `ci.yml`, the jobs of `make ci` plus `deb`, a
+  snapshot `.deb`; and `release.yml`, where a tag builds, attests and
+  publishes the `.deb`. `internal/workflowcheck` tests that their actions are
+  SHA-pinned with least privilege (frostyard/core ADR-0021).
 
 ## Gates
 
@@ -73,7 +76,8 @@ repositories do, read their file.
   the same targets on every pull request and push to `main`, plus its
   `vulncheck` job (`make vulncheck`: govulncheck, pinned in the Makefile; it
   needs the network, so no gate runs it). Keep it at 0 reachable findings.
-- `make lodge-package` stages Porter in lodge's install layout.
+- `make lodge-package` stages Porter in lodge's install layout. `make deb`
+  (after `make web-build`) builds the `.deb`, and `make bump` tags a release.
 
 ## Invariants (decided; binding from the first line of code)
 
