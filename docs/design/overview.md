@@ -279,10 +279,11 @@ that call's own `RPCError`, so Porter reads the code it keeps.
   - lodge's agent socket and inference socket must be up. Without
     inference, chat says the model is unavailable, and routines retry
     ([specs/routines.md](../specs/routines.md)).
-  - An app that is down drops its tools from the registry until it is back,
-    and the thread says so once.
+  - An app that is down drops its tools from the registry until it is back.
+    The system prompt tells the model to say so if the owner asks for them.
 - **Revoking an app's token** in lodge cuts Porter off from that app at
   once. The rest keep working.
+- **Update, roll back and limits:** for readers, in the [README](../../README.md#update).
 - **Logs:** each tool call is logged with its app, tool, status and
   duration, never its content. lodge logs inference use as app `porter`.
 
