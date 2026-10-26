@@ -112,8 +112,23 @@ line other than `ExecStart=`, copy that change by hand. Keep
 The thread database, `/var/lib/frostporter/thread.db`, has no schema version.
 A newer porterd only adds the column `routines.last_success`, and an older
 porterd still opens the database with it. Today a roll back does not need a
-restore of `/var/lib/frostporter`. Restore it from the archive only if the
-older porterd fails to start. A later migration can change this.
+restore of `/var/lib/frostporter`. A later migration can change this.
+
+Restore `/var/lib/frostporter` only if `journalctl -u frostporter.service`
+shows a thread database error at start. These errors begin with
+`open thread database:`, `thread schema:`, `thread recovery:` or
+`routines columns:`. A start can fail for other reasons, for example a bad
+`/etc/porter/porter.json`, and a restore does not help then. To restore:
+
+1. Stop `frostporter.socket` and `frostporter.service`.
+2. Keep the current state aside:
+   `sudo mv /var/lib/frostporter /var/lib/frostporter.new`.
+3. Extract it: `sudo tar -xzpf ARCHIVE -C / var/lib/frostporter`.
+4. Start and check, as in steps 6 and 7 of Update.
+
+The restore loses the thread turns, Activity, approvals and routine history
+after the archive, and any token changes. It does not undo what Porter
+already did in other apps, such as drafts and notes.
 
 Configuration is in `/etc/porter/porter.json`. Memory and routines live in
 your vault, not on the host.
@@ -158,8 +173,8 @@ What can go wrong:
   the harm. It does not make an attack impossible.
 - An app with no token only warns in the log, and Porter leaves it out. Its
   tools are then missing.
-- An app that is down drops its tools until it is back. The thread says so
-  once.
+- An app that is down loses its tools until it is back. Porter leaves them
+  out, and its prompt tells the model to say so if you ask for them.
 - Without lodge's inference, chat says that the model is unavailable, and
   routines retry.
 - A reply stops at 40 tool calls. A routine run that passes 40 fails.
