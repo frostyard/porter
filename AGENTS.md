@@ -57,7 +57,8 @@ repositories do, read their file.
 - `web/`: the companion and the full app (the thread, cards, Activity and
   Approvals), on `@frostyard/lodge-client` and `@frostyard/lodge-ui`.
 - `packaging/lodge`: the manifest, the socket and service units, the system
-  user, and `stage.sh`.
+  user, and `stage.sh`. `stage.sh` writes only under `usr/` (core ADR-0058);
+  `internal/packagecheck` tests the staged tree and its units.
 - `.github/workflows/ci.yml`: CI, the jobs of `make ci`.
   `internal/workflowcheck` tests that its actions are SHA-pinned with least
   privilege (frostyard/core ADR-0021).
