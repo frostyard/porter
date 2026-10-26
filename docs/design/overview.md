@@ -283,6 +283,7 @@ that call's own `RPCError`, so Porter reads the code it keeps.
     and the thread says so once.
 - **Revoking an app's token** in lodge cuts Porter off from that app at
   once. The rest keep working.
+- **Update, roll back and limits:** for readers, in the [README](../../README.md#update).
 - **Logs:** each tool call is logged with its app, tool, status and
   duration, never its content. lodge logs inference use as app `porter`.
 
