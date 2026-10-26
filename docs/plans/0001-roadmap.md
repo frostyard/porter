@@ -37,12 +37,15 @@ Porter runs on lodge's host, an Incus VM, as lodge's `porter` app.
 
 How the host differs from `make lodge-package`'s layout:
 - porterd is `/opt/lodge/bin/porterd`, with the version before it kept as
-  `porterd.prev`. stage.sh stages `/usr/local/bin/porterd`.
+  `porterd.prev`. stage.sh stages `/usr/bin/porterd`, the layout a sysext
+  carries ([core ADR-0058](https://github.com/frostyard/core/blob/main/docs/adr/0058-ship-suite-desktop-apps-as-flatpaks-and-services-as-sysexts.md)).
+  The host does not change: its porterd stays in `/opt/lodge/bin`, which
+  its units name.
 - The units are in `/etc/systemd/system/` and the sysusers.d entry in
   `/etc/sysusers.d/`. Their `ExecStart` is `/opt/lodge/bin/porterd`; they
   are otherwise the same as stage.sh's.
 - Thus do not extract the staged tarball onto `/`: porterd would not
-  change. Extract it to a directory, copy `usr/local/bin/porterd` to
+  change. Extract it to a directory, copy `usr/bin/porterd` to
   `/opt/lodge/bin/porterd`, replace `/usr/share/lodge/apps/porter/` with
   the staged one (directories 0755, files 0644, owned by root), then
   `systemctl daemon-reload`, `systemctl restart frostporter.service` and
