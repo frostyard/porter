@@ -79,6 +79,27 @@ repositories do, read their file.
 - `make lodge-package` stages Porter in lodge's install layout. `make deb`
   (after `make web-build`) builds the `.deb`, and `make bump` tags a release.
 
+## Releases and dependencies
+
+- Tags look like `v1.2.3` (svu: `.svu.yml`, prefix `v`, v0 mode). The next
+  version is `svu next` from Conventional Commits; on v0 a breaking change
+  gives a minor.
+- The push of a `v*` tag runs `.github/workflows/release.yml`. Its build job
+  runs `make web-build` and `make deb` (nfpm) to make
+  `frostyard-porterd_*_amd64.deb`. Its release job attests the provenance
+  and runs `gh release create` with the `.deb` and generated notes.
+- Brian tags. Agents never tag, push tags or release. `make bump` is his
+  command: on a clean, up to date `main` with a passing `make check`, it
+  tags `svu next` and pushes the tag.
+- Internal dependencies: `github.com/frostyard/lodge/kit` `v0.3.1` in
+  `go.mod` (packages `inference`, `jsonrpc`, `lodgeapp`, `manifest`,
+  `kittest`, `rpctest`); `@frostyard/lodge-client` `client/v0.3.2` and
+  `@frostyard/lodge-ui` `ui/v0.6.0`, as `github:frostyard/lodge` tags in
+  `web/package.json`. `mise.toml`, the scripts, the packaging files and the
+  workflows pin no other frostyard or bketelsen module.
+- Users: lodge hosts Porter as an app, and Porter calls the MCP endpoints
+  of other apps. Other consumers are not stated.
+
 ## Invariants (decided; binding from the first line of code)
 
 - **Porter owns no data.** It reaches mail, calendar, tasks, notes and reading (read-only,
