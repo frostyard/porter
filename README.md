@@ -115,9 +115,10 @@ porterd still opens the database with it. Today a roll back does not need a
 restore of `/var/lib/frostporter`. A later migration can change this.
 
 Restore `/var/lib/frostporter` only if `journalctl -u frostporter.service`
-shows a thread database error at start. These errors begin with
-`open thread database:`, `thread schema:`, `thread recovery:` or
-`routines columns:`. A start can fail for other reasons, for example a bad
+shows a thread database error at start. These errors follow `porterd: ` in
+the journal, and begin with `open thread database:`, `thread schema:`,
+`thread recovery:`, `routines columns:`, `add routines.last_success:` or
+`fill routines.last_success:`. A start can fail for other reasons, for example a bad
 `/etc/porter/porter.json`, and a restore does not help then. To restore:
 
 1. Stop `frostporter.socket` and `frostporter.service`.
@@ -135,15 +136,66 @@ your vault, not on the host.
 
 ### After the sysexts
 
-This is planned, not built: [core plan
-0010](https://github.com/frostyard/core/blob/main/docs/plans/0010-suite-packaging.md)
-ships porterd as the sysext `porterd` for Snosi images (Floe). On such an
-image, update with `sudo updex features update --component=porterd` and a
-reboot. Roll back with `sudo updex features rollback porterd`, which takes
-effect at the next boot. The state in `/var/lib/frostporter` and
-`/etc/porter` is not in the sysext. A sysext roll back does not undo a
-change to `thread.db`, so the archive of `/var/lib/frostporter` stays
-useful. lodge's own host stays hand-installed for now (deferred 2026-10-23).
+The sysext `porterd` is built and published for Snosi bootc images (Floe).
+[snosi#1169](https://github.com/frostyard/snosi/pull/1169) added the first 2
+suite sysexts (notesd, maild).
+[snosi#1173](https://github.com/frostyard/snosi/pull/1173) added lodge, readd
+and porterd. [snosi#1175](https://github.com/frostyard/snosi/pull/1175) pinned
+readd 0.2.0 and porterd 0.1.1 (lodge stays 0.1.0). Updex downloads them from
+`https://repository.frostyard.org/ext/porterd/` and checks the signature. The
+full steps are on [the site page](https://frostyard.org/docs/sysexts/porterd/).
+
+lodge's own host stays hand-installed (core Plan 0010 Phase 4 is deferred,
+2026-10-23), so the steps above stay valid for that host.
+
+The state in `/var/lib/frostporter` and the configuration in `/etc/porter` are
+not in the sysext. A sysext roll back does not undo a change to `thread.db`,
+so back up `/var/lib/frostporter` before you update. The units are upheld
+(`Upholds=`), so a plain `systemctl stop` does not hold. For a backup or a
+restore, mask the units, then unmask and start them. Keep the archive
+root-only:
+
+```sh
+sudo systemctl mask --now frostporter.socket frostporter.service
+sudo sh -c 'umask 077; tar -czpf /root/porter-state-$(date -u +%Y%m%dT%H%MZ).tar.gz /var/lib/frostporter'
+sudo systemctl unmask frostporter.socket frostporter.service
+sudo systemctl start frostporter.socket frostporter.service
+```
+
+On a Snosi image, update with:
+
+```sh
+sudo updex features update --component=porterd
+```
+
+An interactive update does a live refresh. With Updex v2.1.3 and later
+([ADR-0019](https://github.com/frostyard/updex/blob/main/docs/adr/0019-apply-merged-sysusers-and-tmpfiles-on-a-live-refresh.md)),
+the new files merge at once, `systemd-sysusers` and `systemd-tmpfiles --create`
+run, and systemd reloads its unit files. Updex does not restart units: the
+running daemon keeps its old binary until you restart it. No reboot is
+necessary. Restart Porter, then let lodge read the new manifest:
+
+```sh
+sudo systemctl restart frostporter.socket frostporter.service
+sudo lodgectl reload
+sudo lodgectl apps
+```
+
+`lodgectl apps` lists `porter` up at the new version. lodge polls every 15
+seconds, so if it shows `down` at once, run it again after 15 seconds.
+
+Only these cases wait for the next boot: `--no-refresh`, the automatic update
+timer, or output that says `refresh skipped`. Then reboot. With an Updex older
+than v2.1.3, run `sudo systemd-sysusers`, `sudo systemd-tmpfiles --create` and
+`sudo systemctl daemon-reload` first (or reboot). `updex --version` shows the
+version.
+
+Roll back with `sudo updex features rollback porterd`. It takes effect at the
+next boot. Add `--now` to apply it at once, then restart and reload as
+above.
+
+For when to restore, and how, see [Roll back](#roll-back). On a Snosi image,
+mask the units there instead of a plain stop.
 
 ## Release
 
@@ -172,9 +224,10 @@ Verify a downloaded package:
 gh attestation verify frostyard-porterd_X.Y.Z_amd64.deb --repo frostyard/porter
 ```
 
-Snosi picks the package up later (core
-[Plan 0010](https://github.com/frostyard/core/blob/main/docs/plans/0010-suite-packaging.md),
-Phase 3).
+Snosi pins each release's `.deb` in a reviewed checksum PR, then builds and
+publishes the sysext `porterd`
+([snosi#1173](https://github.com/frostyard/snosi/pull/1173)). See
+[After the sysexts](#after-the-sysexts).
 
 ## Limits
 
