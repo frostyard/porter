@@ -14,7 +14,7 @@ Contracts: [specs/routines.md](../specs/routines.md), and lodge's
 [app contract](https://github.com/frostyard/lodge/blob/main/docs/specs/app-contract.md).
 
 **Status: Phases 2, 3 and 5 built, merged to `main` and deployed on
-lodge's host** (2026-10-21, `d3db41b`; the record is in the
+lodge's host** (v0.2.0, 2026-11-03; the record is in the
 [roadmap's Deployments](../plans/0001-roadmap.md#deployments)). Built:
 - porterd: the thread store, the tool registry over lodge's agent socket,
   the agent loop and the thread API;
