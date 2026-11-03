@@ -31,15 +31,27 @@ on [lodge's kit](https://github.com/frostyard/lodge/tree/main/kit) and
 
 ## Update
 
-These steps are for lodge's host today, which is hand-installed. It differs
-from the layout `make lodge-package` stages: porterd is
-`/opt/lodge/bin/porterd`, and the units are in `/etc/systemd/system/`. Do not
-extract the staged tree onto `/`.
+These steps are for lodge's host, which is hand-installed: it has no apt
+source and no sysext for porterd (2026-11-03). An update installs a
+release's `.deb`, `frostyard-porterd_X.Y.Z_amd64.deb` (see
+[Release](#release)), by hand with `dpkg -i`. Since v0.2.0 (2026-11-03) the
+host has the package's layout: porterd is `/usr/bin/porterd`, and the units
+and the sysusers.d entry are the package's, in `/usr/lib/`. The package has
+no maintainer scripts: it starts, stops and reloads nothing, so the steps
+below do that.
 
-1. Get the new code with `git pull --ff-only origin main`. Build the web
-   bundle with `make web-build` (in an nsl machine), then stage with
-   `make lodge-package`. The tree is `build/lodge-root`. porterd is
-   `usr/bin/porterd` there, or `usr/local/bin/porterd` in earlier commits.
+1. Get the package and check it, on a computer with `gh`. Continue only when
+   the hash is the release asset's digest and the attestation's workflow is
+   `release.yml` at `refs/tags/vX.Y.Z`. Then copy the package to the host's
+   `/root`, and keep it there: it is the next roll back.
+
+   ```sh
+   gh release download vX.Y.Z -R frostyard/porter -p 'frostyard-porterd_*_amd64.deb'
+   sha256sum frostyard-porterd_X.Y.Z_amd64.deb
+   gh release view vX.Y.Z -R frostyard/porter --json assets --jq '.assets[].digest'
+   gh attestation verify frostyard-porterd_X.Y.Z_amd64.deb -R frostyard/porter
+   ```
+
 2. On the host, stop Porter. While it is stopped, lodge shows `porter` down
    and routines do not run.
 
@@ -52,62 +64,59 @@ extract the staged tree onto `/`.
    app tokens.
 
    ```sh
-   sudo sh -c 'umask 077; tar -czpf /root/porter-rollback-<old commit>-<UTC time>.tar.gz \
-     /opt/lodge/bin/porterd /usr/share/lodge/apps/porter \
-     /etc/systemd/system/frostporter.socket \
-     /etc/systemd/system/frostporter.service \
-     /etc/sysusers.d/frostporter.conf /etc/porter /var/lib/frostporter'
+   sudo sh -c 'umask 077; tar -czpf /root/porter-rollback-<old version>-<UTC time>.tar.gz \
+     /usr/bin/porterd /usr/share/lodge/apps/porter \
+     /usr/lib/systemd/system/frostporter.socket \
+     /usr/lib/systemd/system/frostporter.service \
+     /usr/lib/sysusers.d/frostporter.conf /etc/porter /var/lib/frostporter'
    ```
 
-4. Keep the old binary, then copy in the new one. Both files must stay owned
-   by root.
+4. Install, reload and start:
 
    ```sh
-   sudo mv /opt/lodge/bin/porterd /opt/lodge/bin/porterd.prev
-   sudo install -m755 <staged porterd> /opt/lodge/bin/porterd
-   ```
-
-5. Replace `/usr/share/lodge/apps/porter/` with the staged one. Use `cp -r`,
-   not `-a`, so that root owns the files. The `chmod` sets directories to 0755
-   and files to 0644.
-
-   ```sh
-   sudo rm -rf /usr/share/lodge/apps/porter
-   sudo cp -r build/lodge-root/usr/share/lodge/apps/porter /usr/share/lodge/apps/
-   sudo chmod -R u=rwX,go=rX /usr/share/lodge/apps/porter
-   ```
-6. Start and reload:
-
-   ```sh
+   sudo dpkg -i /root/frostyard-porterd_X.Y.Z_amd64.deb
    sudo systemctl daemon-reload
    sudo systemctl start frostporter.socket frostporter.service
    sudo lodgectl reload
    ```
 
-7. Check. `sudo lodgectl apps` must show `porter` up, at the version of the
-   manifest that `make lodge-package` wrote. `journalctl -u frostporter.service`
-   since the start must show no warning and no error.
+5. Check. `sudo lodgectl apps` must show `porter` up, at the package's
+   version. `journalctl -u frostporter.service` since the start must show no
+   warning and no error.
 
-These steps keep the host's units in `/etc/systemd/system/`. If a new commit
-changes `packaging/lodge/frostporter.service` or `frostporter.socket` in a
-line other than `ExecStart=`, copy that change by hand. Keep
-`ExecStart=/opt/lodge/bin/porterd`.
+The move to the package, once (v0.2.0 on lodge's host, 2026-11-03): before
+it, porterd was `/opt/lodge/bin/porterd`, with full units in
+`/etc/systemd/system/` and the sysusers.d entry in `/etc/sysusers.d/`. Those
+copies shadow the package's, so the move archived them with step 3's archive
+(their paths), then ran `systemctl disable frostporter.socket`, removed
+them, `/opt/lodge/bin/porterd`, `porterd.prev` and
+`/usr/share/lodge/apps/porter/`, then ran `dpkg -i`,
+`systemctl daemon-reload`, `systemctl enable frostporter.socket` and the
+start of step 4. It did not run `lodgectl reload`, so lodge showed the old
+version until a later reload. Only one porterd can start now.
 
 ## Roll back
 
 1. Stop Porter, as in step 2 of Update.
-2. Put the old binary back: `porterd.prev`, or `porterd` from the archive,
-   to `/opt/lodge/bin/porterd`.
-3. Remove `/usr/share/lodge/apps/porter/`, then restore from the archive.
-   This command restores the binary and the bundle, and the units, but not
-   the state or the configuration:
+2. Put the earlier release back with its `.deb`, which step 1 of Update kept
+   in `/root`. `dpkg` accepts the older version:
+
+   ```sh
+   sudo dpkg -i /root/frostyard-porterd_OLD_amd64.deb
+   ```
+
+   To go back to `d3db41b`, the version before the package, use its archive
+   from the move, `/root/porter-rollback-d3db41b-20261103T152041Z.tar.gz`:
+   `sudo dpkg -r frostyard-porterd`, remove `/usr/share/lodge/apps/porter/`,
+   then restore the binary, the bundle, the units, their enable link and the
+   sysusers.d entry, but not the state or the configuration:
 
    ```sh
    sudo tar -xzpf ARCHIVE -C / --exclude=var/lib/frostporter --exclude=etc/porter
    ```
 
-   You can also build the earlier commit and stage it.
-4. Start, reload and check, as in steps 6 and 7 of Update.
+3. Start, reload and check, as in steps 4 (without `dpkg -i`) and 5 of
+   Update.
 
 The thread database, `/var/lib/frostporter/thread.db`, has no schema version.
 A newer porterd only adds the column `routines.last_success`, and an older
@@ -125,7 +134,7 @@ the journal, and begin with `open thread database:`, `thread schema:`,
 2. Keep the current state aside:
    `sudo mv /var/lib/frostporter /var/lib/frostporter.new`.
 3. Extract it: `sudo tar -xzpf ARCHIVE -C / var/lib/frostporter`.
-4. Start and check, as in steps 6 and 7 of Update.
+4. Start and check, as in steps 4 (without `dpkg -i`) and 5 of Update.
 
 The restore loses the thread turns, Activity, approvals and routine history
 after the archive, and any token changes. It does not undo what Porter

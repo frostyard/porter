@@ -20,10 +20,9 @@ Status (2026-10-22):
   Its done-when is met: a brief run by hand lists frostread items, and
   chat answers "what is new in my feeds" from Read (OWNER-REPORTED,
   Brian, 2026-10-21).
-- `main` at `d3db41b` is deployed on lodge's host (2026-10-21). See
-  [Deployments](#deployments). The later merges have no deploy record:
-  porter#10 to porter#13 pin `@frostyard/lodge-ui` `ui/v0.5.0` and move the
-  web bundle to lodge-client's `rpc` subpath at `client/v0.3.2`.
+- v0.2.0 (`99ab9a3`) is deployed on lodge's host (2026-11-03), from its
+  release `.deb`. See [Deployments](#deployments). It carries every merge
+  through porter#25 (Run now).
 
 ## Deployments
 
@@ -34,22 +33,20 @@ Porter runs on lodge's host, an Incus VM, as lodge's `porter` app.
 | 2026-10-20 | web `7405fdf`, porterd `d8b1e1b` | Phases 2 and 3 from their branches | (not recorded) |
 | 2026-10-21 | `73eead0` | `main` after porter#5: the service-bell icon (frostmail ADR-0015's frame), the look from `@frostyard/lodge-ui` `ui/v0.1.0`, times in the owner's zone, links into the vault, the `routine_alias` default | `lodgectl status` and `lodgectl apps` show porter `73eead0` up; the journal since the restart has no warning or error; the icon shows in the rail and on the companion button; 1 chat turn; a link in a brief opens the note, and a `/mail/message/…` link in a brief opens the message |
 | 2026-10-21 | `d3db41b` | `main` after porter#7: Porter reads frostread, read-only (ADR-0007); a routine knows its last success. `read` added to `/etc/porter/porter.json`; token `porter-read` (scope `read`, agent `frostporter`). Rollback archive `/root/porter-rollback-73eead0-20261021T155413Z.tar.gz` | `lodgectl apps` shows porter `d3db41b` up, with 3 apps; no warning in the journal since the restart; a temporary routine with the Morning brief's body and no `output` ran by hand (15:57 UTC, 0 actions), and its Reading section listed The Go Blog's new item with a `/read/item/<id>` link and the unread count; the temporary routine was then deleted |
+| 2026-11-03 | v0.2.0 (`99ab9a3`) | The release `.deb`, `dpkg -i` (Brian, T757a): Run now from the Routines list (porter#25), lodge kit v0.3.1. The host moved to the package's layout: `/usr/bin/porterd` and the package's units; the `/etc/systemd/system/` units, the `/etc/sysusers.d/` entry, `/opt/lodge/bin/porterd` and `porterd.prev` were archived and removed (README, Update). The package's sha256 `7068232f…c23fd6` and its attestation (`release.yml@refs/tags/v0.2.0`) were checked first. Rollback archive `/root/porter-rollback-d3db41b-20261103T152041Z.tar.gz` | `/health` on the app socket answers `0.2.0`, protocol 1; the service is `/usr/lib/systemd/system/frostporter.service`, `ExecStart=/usr/bin/porterd`; no warning in the journal since the start; 2 routines read, both valid, and 3 apps; over `/api` as a session, `activity.routines` and `activity.list` answer, and `activity.run` with an unknown name answers `notFound` (d3db41b answered "method does not exist"); no real run was started; the bundle carries Run now. lodge was not reloaded, so `lodgectl apps` still shows `72f0ebd` until `lodgectl reload` |
 
-How the host differs from `make lodge-package`'s layout:
-- porterd is `/opt/lodge/bin/porterd`, with the version before it kept as
-  `porterd.prev`. stage.sh stages `/usr/bin/porterd`, the layout a sysext
-  carries ([core ADR-0058](https://github.com/frostyard/core/blob/main/docs/adr/0058-ship-suite-desktop-apps-as-flatpaks-and-services-as-sysexts.md)).
-  The host does not change: its porterd stays in `/opt/lodge/bin`, which
-  its units name.
-- The units are in `/etc/systemd/system/` and the sysusers.d entry in
-  `/etc/sysusers.d/`. Their `ExecStart` is `/opt/lodge/bin/porterd`; they
-  are otherwise the same as stage.sh's.
-- Thus do not extract the staged tarball onto `/`: porterd would not
-  change. Extract it to a directory, copy `usr/bin/porterd` to
-  `/opt/lodge/bin/porterd`, replace `/usr/share/lodge/apps/porter/` with
-  the staged one (directories 0755, files 0644, owned by root), then
-  `systemctl daemon-reload`, `systemctl restart frostporter.service` and
-  `lodgectl reload`.
+How the host differs from a Snosi image:
+- It has no sysext and no apt source for porterd. Since v0.2.0
+  (2026-11-03), it installs the release's `.deb` by hand with `dpkg -i`, so
+  its layout is the package's, which is the layout a sysext carries
+  ([core ADR-0058](https://github.com/frostyard/core/blob/main/docs/adr/0058-ship-suite-desktop-apps-as-flatpaks-and-services-as-sysexts.md)):
+  `/usr/bin/porterd`, and the units and the sysusers.d entry in `/usr/lib/`.
+  The package has no maintainer scripts, so an update runs
+  `systemctl daemon-reload`, starts Porter and runs `lodgectl reload` by hand
+  (the README's Update).
+- Before v0.2.0, porterd was `/opt/lodge/bin/porterd`, with full units in
+  `/etc/systemd/system/` that named it and the sysusers.d entry in
+  `/etc/sysusers.d/`. The move removed them, so only one porterd can start.
 - `/etc/porter/porter.json` has `lodge_url` set to lodge's own tailnet node
   (from `lodgectl status`), not to the host's name.
 
