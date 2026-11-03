@@ -90,8 +90,10 @@ it, porterd was `/opt/lodge/bin/porterd`, with full units in
 copies shadow the package's, so the move archived them with step 3's archive
 (their paths), then ran `systemctl disable frostporter.socket`, removed
 them, `/opt/lodge/bin/porterd`, `porterd.prev` and
-`/usr/share/lodge/apps/porter/`, and then did step 4 with
-`systemctl enable frostporter.socket`. Only one porterd can start now.
+`/usr/share/lodge/apps/porter/`, then ran `dpkg -i`,
+`systemctl daemon-reload`, `systemctl enable frostporter.socket` and the
+start of step 4. It did not run `lodgectl reload`, so lodge showed the old
+version until a later reload. Only one porterd can start now.
 
 ## Roll back
 
