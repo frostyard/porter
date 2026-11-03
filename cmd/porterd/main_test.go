@@ -45,6 +45,15 @@ func jsonString(s string) string {
 	return string(b)
 }
 
+// code is an RPC error's code, or 0 for any other error.
+func code(err error) api.ErrorCode {
+	var e *api.Error
+	if errors.As(err, &e) {
+		return e.Code
+	}
+	return 0
+}
+
 func startWith(t *testing.T, m agent.Model) (*app, *kittest.Lodge) {
 	t.Helper()
 	store, err := thread.Open(t.Context(), filepath.Join(t.TempDir(), "thread.db"))
@@ -57,7 +66,7 @@ func startWith(t *testing.T, m agent.Model) (*app, *kittest.Lodge) {
 	ctx, cancel := context.WithCancel(context.Background())
 	svc := service.New(ctx, store, ag, nil)
 	t.Cleanup(func() { cancel(); svc.Wait() })
-	a, err := newApp(slog.New(slog.DiscardHandler), svc, service.NewActivity(store, nil))
+	a, err := newApp(slog.New(slog.DiscardHandler), svc, service.NewActivity(store, nil, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,6 +243,13 @@ func TestActivityOverTheSession(t *testing.T) {
 	rs, err := c.Activity().Routines(t.Context(), &api.ActivityRoutinesParams{})
 	if err != nil || rs == nil || len(rs) != 0 {
 		t.Fatalf("activity.routines = %+v, %v", rs, err)
+	}
+	// No notes token in this daemon, so there is no scheduler to run one now.
+	if err := c.Activity().Run(t.Context(), &api.ActivityRunParams{Name: "Morning brief"}); code(err) != api.CodeUnavailable {
+		t.Errorf("activity.run without a scheduler = %v", err)
+	}
+	if err := c.Activity().Run(t.Context(), &api.ActivityRunParams{Name: ""}); code(err) != api.CodeInvalidParams {
+		t.Errorf("activity.run with an empty name = %v", err)
 	}
 	p, err := c.Thread().Pending(t.Context(), &api.ThreadPendingParams{})
 	if err != nil || len(p.Turns) != 0 {

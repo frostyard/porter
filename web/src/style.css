@@ -1023,6 +1023,34 @@ a.routine-name:hover {
   color: var(--danger);
 }
 
+/* A routine's Run now: a small link, and what its last try said. */
+.routine-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.routine-run {
+  padding: 2px 0;
+  font-size: 12px;
+}
+
+.routine-run:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.routine-run-note {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.routine-run-note.error {
+  color: var(--danger);
+}
+
 .entries {
   display: flex;
   flex-direction: column;

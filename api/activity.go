@@ -81,6 +81,8 @@ type Routine struct {
 	Last string `json:"last,omitzero"`
 	// LastOK is whether its last run succeeded.
 	LastOK *bool `json:"lastOk,omitzero"`
+	// Running says whether a run of it is active now, scheduled or run now.
+	Running bool `json:"running,omitzero"`
 }
 
 // ActivityListParams holds the params of activity.list.
@@ -92,10 +94,17 @@ type ActivityListParams struct {
 // ActivityRoutinesParams holds the params of activity.routines.
 type ActivityRoutinesParams struct{}
 
+// ActivityRunParams holds the params of activity.run.
+type ActivityRunParams struct {
+	// Name is the routine's name.
+	Name string `json:"name"`
+}
+
 // ActivityService is what Porter does on its own.
 type ActivityService interface {
 	List(ctx context.Context, p *ActivityListParams) (*EntryList, error)
 	Routines(ctx context.Context, p *ActivityRoutinesParams) ([]Routine, error)
+	Run(ctx context.Context, p *ActivityRunParams) error
 }
 
 func registerActivity(r *Router, s ActivityService) {
@@ -113,6 +122,13 @@ func registerActivity(r *Router, s ActivityService) {
 			return nil, err
 		}
 		return s.Routines(ctx, &p)
+	})
+	r.handle("activity.run", callers, func(ctx context.Context, raw jsontext.Value) (any, error) {
+		var p ActivityRunParams
+		if err := decodeParams(raw, &p, []string{"name"}); err != nil {
+			return nil, err
+		}
+		return nil, s.Run(ctx, &p)
 	})
 }
 
@@ -140,4 +156,9 @@ func (x ActivityClient) Routines(ctx context.Context, p *ActivityRoutinesParams)
 		return nil, err
 	}
 	return r, nil
+}
+
+// Run calls activity.run.
+func (x ActivityClient) Run(ctx context.Context, p *ActivityRunParams) error {
+	return x.c.Call(ctx, "activity.run", p, nil)
 }

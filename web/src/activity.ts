@@ -88,6 +88,16 @@ function setNote(note: HTMLElement, text: string, error: boolean): void {
   note.hidden = text === "";
 }
 
+/** runState is a routine's Run now request, and what it last said. */
+interface RunState {
+  /** Whether its request is in flight. */
+  pending?: boolean;
+  /** What to show under it, or nothing. */
+  note?: string;
+  /** Whether the note is an error, rather than a routine already running. */
+  error?: boolean;
+}
+
 function message(err: unknown): string {
   return err instanceof Error && err.message ? err.message : String(err);
 }
@@ -102,6 +112,7 @@ export class ActivityView {
   #routinesError: string | null = null;
   #entriesError: string | null = null;
   #loadingMore = false;
+  #runState = new Map<string, RunState>();
   #entryEls = new Map<number, { entry: Entry; el: HTMLElement }>();
 
   #routinesEl: HTMLElement;
@@ -194,6 +205,29 @@ export class ActivityView {
     this.#renderEntries();
   }
 
+  /**
+   * run starts a routine now. A routine already running, or waiting for its
+   * provider, says so; any other failure says why.
+   */
+  async #run(name: string): Promise<void> {
+    if (this.#runState.get(name)?.pending === true) return;
+    this.#runState.set(name, { pending: true });
+    this.#renderRoutines();
+    try {
+      await this.#api.run(name);
+      this.#runState.delete(name);
+    } catch (err) {
+      if (errorCode(err) === Code.disconnected) {
+        this.#runState.delete(name);
+        this.#renderRoutines();
+        return;
+      }
+      const conflict = errorCode(err) === Code.conflict;
+      this.#runState.set(name, { note: conflict ? "It is already running." : `Couldn't run it: ${message(err)}`, error: !conflict });
+    }
+    await this.refreshRoutines();
+  }
+
   // ---- rendering ----
 
   #renderRoutines(): void {
@@ -237,6 +271,18 @@ export class ActivityView {
       times.append(last);
     }
     if (times.childElementCount > 0) root.append(times);
+    if (r.valid) {
+      const run = this.#runState.get(r.name);
+      const busy = r.running === true || run?.pending === true;
+      const actions = el("div", "routine-actions");
+      const button = el("button", "link routine-run", busy ? "Running…" : "Run now");
+      button.type = "button";
+      button.disabled = busy;
+      button.addEventListener("click", () => void this.#run(r.name));
+      actions.append(button);
+      root.append(actions);
+      if (run?.note !== undefined) root.append(el("div", run.error === true ? "routine-run-note error" : "routine-run-note", run.note));
+    }
     return root;
   }
 
