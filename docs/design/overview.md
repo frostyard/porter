@@ -101,6 +101,12 @@ A Go daemon on lodge's kit (`kit/lodgeapp`, `kit/jsonrpc`,
     with the unattended tools and approvals.
   - It writes the output note, replacing only its own.
   - It posts the run's line with its action cards, and records Activity.
+  - The owner can run a routine now from Activity's Routines list
+    (`activity.run`): it is a scheduled run with the same rights, prompt
+    and output, at the moment it starts, and it is not retried when the
+    model's provider is unavailable. It does not move the routine's last
+    run or last success ([specs/routines.md](../specs/routines.md), Run
+    now).
   - SQLite keeps each routine's first-seen and last-run times, for missed
     runs at start, and the scheduled time of its last successful run. A
     failed run does not move that time. The run gets it, and its system
@@ -242,7 +248,8 @@ that call's own `RPCError`, so Porter reads the code it keeps.
   with a link and an undo where the app has one. Approvals are cards with
   Approve and Dismiss.
 - **The full app** (switcher, then `p`) has the same thread, plus Activity
-  (routine runs, unattended actions and invalid routines) and Approvals.
+  (routine runs, unattended actions and invalid routines, with each
+  routine's Run now) and Approvals.
 - **On a narrow window,** the companion is lodge's full-height sheet. The
   input stays above the keyboard.
 - **It loads nothing remote.** Links show their destination, and lodge

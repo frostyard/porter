@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Entry, EntryList, Routine } from "../src/api";
+import { Code, type Entry, type EntryList, RpcError, type Routine } from "../src/api";
 import { addEntry, emptyActivity, entryTurn, newestEntries, olderEntries } from "../src/activity";
 import { App } from "../src/app";
 import { dateTime, dayLabel } from "../src/time";
@@ -33,6 +33,7 @@ async function setup(o: { routines?: Routine[]; list?: (p: Record<string, unknow
     .on("thread.list", () => ({ turns: [], more: false }))
     .on("thread.pending", () => ({ turns: [], more: false }))
     .on("activity.routines", () => o.routines ?? [brief, review, broken])
+    .on("activity.run", () => undefined)
     .on(
       "activity.list",
       o.list ??
@@ -223,6 +224,64 @@ describe("Activity", () => {
     const { app, root } = await setup();
     app.event({ event: "turn", data: turn(40, { role: "notice", cards: [{ ...approval, status: "done" }] }) });
     expect(q(root, '.entry[data-id="3"] .card.approval .card-outcome').textContent).toBe("Approved.");
+  });
+});
+
+describe("Run now", () => {
+  const runButton = (root: Element, name: string) =>
+    root.querySelector<HTMLButtonElement>(`.routine[data-name="${name}"] .routine-run`);
+  const noteOf = (root: Element, name: string) => root.querySelector(`.routine[data-name="${name}"] .routine-run-note`);
+
+  it("runs a routine now, disabled while the request is in flight, then reads the routines again", async () => {
+    const { root, transport } = await setup();
+    expect(transport.paramsOf("activity.routines")).toHaveLength(1);
+    const run = runButton(root, "Morning brief") as HTMLButtonElement;
+    expect(run.textContent).toBe("Run now");
+    expect(run.disabled).toBe(false);
+    run.click();
+    const busy = runButton(root, "Morning brief") as HTMLButtonElement;
+    expect(busy.textContent).toBe("Running…");
+    expect(busy.disabled).toBe(true);
+    await flush();
+    expect(transport.paramsOf("activity.run")).toStrictEqual([{ name: "Morning brief" }]);
+    expect(transport.paramsOf("activity.routines")).toHaveLength(2);
+    expect(noteOf(root, "Morning brief")).toBeNull();
+  });
+
+  it("says when the routine is already running", async () => {
+    const { root, transport } = await setup();
+    transport.on("activity.run", () => {
+      throw new RpcError(Code.conflict, "Morning brief is already running");
+    });
+    runButton(root, "Morning brief")?.click();
+    await flush();
+    expect(noteOf(root, "Morning brief")?.textContent).toBe("It is already running.");
+  });
+
+  it("says why it could not run, and says nothing when disconnected", async () => {
+    const { root, transport } = await setup();
+    transport.on("activity.run", () => {
+      throw new RpcError(Code.unavailable, "the scheduler is not running");
+    });
+    runButton(root, "Morning brief")?.click();
+    await flush();
+    expect(noteOf(root, "Morning brief")?.textContent).toBe("Couldn't run it: the scheduler is not running");
+    expect(noteOf(root, "Morning brief")?.classList.contains("error")).toBe(true);
+
+    transport.on("activity.run", () => {
+      throw new RpcError(Code.disconnected, "no connection");
+    });
+    runButton(root, "Morning brief")?.click();
+    await flush();
+    expect(noteOf(root, "Morning brief")).toBeNull();
+  });
+
+  it("has no button for an invalid routine, and a disabled one while it runs", async () => {
+    const { root } = await setup({ routines: [broken, routine("Morning brief", { running: true })] });
+    expect(runButton(root, "Broken")).toBeNull();
+    const running = runButton(root, "Morning brief") as HTMLButtonElement;
+    expect(running.textContent).toBe("Running…");
+    expect(running.disabled).toBe(true);
   });
 });
 

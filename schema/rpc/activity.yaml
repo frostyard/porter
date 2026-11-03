@@ -49,6 +49,7 @@ types:
       - {name: next, type: string, optional: true, doc: "When it runs next, RFC 3339 in UTC; absent when invalid or disabled."}
       - {name: last, type: string, optional: true, doc: "When it last ran, RFC 3339 in UTC."}
       - {name: lastOk, type: bool, optional: true, doc: "Whether its last run succeeded."}
+      - {name: running, type: bool, optional: true, doc: "Whether a run of it is active now, scheduled or run now."}
 methods:
   - name: list
     doc: A page of Activity, the newest entries before `before`, newest first.
@@ -60,3 +61,15 @@ methods:
   - name: routines
     doc: The routines in Porter/Routines/, by name, valid or not.
     result: "[]Routine"
+  - name: run
+    doc: >-
+      Runs a routine now, with the rights of a scheduled run
+      (docs/specs/routines.md, Run now). It returns when the run starts; the
+      run reports through Activity and the thread as usual. notFound when no
+      routine has that name; conflict when the routine is invalid, or when a
+      run of it is active (also a run that waits for its provider);
+      unavailable when the scheduler does not run (no notes token, or
+      porterd is stopping).
+    params:
+      - {name: name, type: string, doc: "The routine's name."}
+    errors: [invalidParams, notFound, conflict, unavailable]

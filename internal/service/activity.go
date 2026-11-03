@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 
 	"github.com/frostyard/porter/api"
 	"github.com/frostyard/porter/internal/thread"
@@ -12,14 +13,15 @@ import (
 type Activity struct {
 	store    *thread.Store
 	routines func(context.Context) ([]api.Routine, error)
+	run      func(ctx context.Context, name string) error
 }
 
 var _ api.ActivityService = (*Activity)(nil)
 
-// NewActivity returns the service; routines lists the routines, and may be
-// nil when Porter has no notes.
-func NewActivity(store *thread.Store, routines func(context.Context) ([]api.Routine, error)) *Activity {
-	return &Activity{store: store, routines: routines}
+// NewActivity returns the service; routines lists the routines, and run
+// starts one now. Both may be nil when Porter has no notes.
+func NewActivity(store *thread.Store, routines func(context.Context) ([]api.Routine, error), run func(ctx context.Context, name string) error) *Activity {
+	return &Activity{store: store, routines: routines, run: run}
 }
 
 // List implements activity.list.
@@ -51,4 +53,15 @@ func (s *Activity) Routines(ctx context.Context, _ *api.ActivityRoutinesParams) 
 		rs = []api.Routine{}
 	}
 	return rs, err
+}
+
+// Run implements activity.run: it starts the routine named in p now.
+func (s *Activity) Run(ctx context.Context, p *api.ActivityRunParams) error {
+	if strings.TrimSpace(p.Name) == "" {
+		return api.Errorf(api.CodeInvalidParams, "name is required")
+	}
+	if s.run == nil {
+		return api.Errorf(api.CodeUnavailable, "the scheduler is not running")
+	}
+	return s.run(ctx, p.Name)
 }

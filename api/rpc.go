@@ -167,4 +167,4 @@ func (s Services) register(r *Router) error {
 // Methods is every method the contract defines.
 var Methods = []string{"rpc.hello", "rpc.ping",
 	"thread.list", "thread.send", "thread.search", "thread.confirm", "thread.cancel", "thread.pending", "thread.subscribe",
-	"activity.list", "activity.routines"}
+	"activity.list", "activity.routines", "activity.run"}

@@ -251,6 +251,8 @@ func (r *rig) lastTurn(t *testing.T) api.Turn {
 
 func TestTheBriefRunsAtItsTimeAndWritesItsNote(t *testing.T) {
 	r := newRig(t)
+	seen := &runningSeen{}
+	r.s.OnEntry = seen.on(r.s)
 	r.v.put("Porter/Routines/Morning brief.md", brief)
 	r.v.put("Porter/Routines/Old/Ignored.md", brief) // not directly in the folder
 	r.a.script(answer("# Monday\n\nThree meetings. [Re: Plan](/mail/message/9)", api.Card{ID: "c1", Kind: api.CardTool, Tool: "read_note", Status: api.StatusDone},
@@ -289,6 +291,7 @@ func TestTheBriefRunsAtItsTimeAndWritesItsNote(t *testing.T) {
 	if len(r.a.ran()) != 1 {
 		t.Error("the weekday brief ran on Saturday")
 	}
+	seen.want(t)
 }
 
 func TestAnEditedRoutineTakesEffectWithoutARestart(t *testing.T) {
@@ -515,5 +518,314 @@ func TestARunGetsTheTimeOfTheLastSuccess(t *testing.T) {
 	monday := time.Date(2026, 10, 19, 6, 30, 0, 0, r.ny)
 	if !specs[0].LastRun.IsZero() || !specs[1].LastRun.Equal(monday) || !specs[2].LastRun.Equal(monday) {
 		t.Errorf("last runs = %v, %v, %v; want zero, %v, %v", specs[0].LastRun, specs[1].LastRun, specs[2].LastRun, monday, monday)
+	}
+}
+
+// start starts the scheduler on a context the test ends, so that RunNow has
+// a base context to run on.
+func (r *rig) start(t *testing.T) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(func() { cancel(); r.s.Wait() })
+	r.s.Start(ctx)
+}
+
+// code is an RPC error's code, or 0 for any other error.
+func code(err error) api.ErrorCode {
+	var e *api.Error
+	if errors.As(err, &e) {
+		return e.Code
+	}
+	return 0
+}
+
+// A run now runs a routine at once, with a scheduled run's prompt, output
+// and reporting, and it leaves the routine's scheduled runs alone.
+func TestARunNowRunsAtOnceWithTheRightsOfAScheduledRun(t *testing.T) {
+	r := newRig(t)
+	seen := &runningSeen{}
+	r.s.OnEntry = seen.on(r.s)
+	r.v.put("Porter/Routines/Morning brief.md", brief)
+	r.start(t)
+	r.a.script(answer("Asked for now."))
+	if err := r.s.RunNow(t.Context(), "Morning brief"); err != nil {
+		t.Fatal(err)
+	}
+	r.s.WaitRuns()
+	specs := r.a.ran()
+	if len(specs) != 1 || specs[0].Name != "Morning brief" || specs[0].Output != "Porter/Briefs/2026-10-19.md" ||
+		specs[0].Prompt != "Write my morning brief for today.\n" || !specs[0].LastRun.IsZero() {
+		t.Fatalf("runs = %+v", specs)
+	}
+	out, ok := r.v.get("Porter/Briefs/2026-10-19.md")
+	if !ok || !strings.HasPrefix(out, "---\nroutine: Morning brief\nrun: \"2026-10-19T06:00:00-04:00\"\n---\nAsked for now.") {
+		t.Fatalf("the output note:\n%s", out)
+	}
+	turn := r.lastTurn(t)
+	if turn.Text != "**Morning brief** (run now): [Porter/Briefs/2026-10-19.md](/notes/2/Porter/Briefs/2026-10-19.md)" {
+		t.Errorf("the thread line = %q", turn.Text)
+	}
+	es := r.entries(t)
+	if len(es) != 1 || es[0].Kind != api.EntryRun || !es[0].OK || !strings.HasPrefix(es[0].Text, "Run now. Wrote Porter/Briefs/2026-10-19.md.") {
+		t.Fatalf("activity = %+v", es)
+	}
+	// Only a scheduled run moves these.
+	st, err := r.store.SeeRoutine(t.Context(), "Morning brief", r.s.now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.LastScheduled.IsZero() || !st.LastSuccess.IsZero() || st.LastOK != nil {
+		t.Errorf("a run now moved the routine's state: %+v", st)
+	}
+	seen.want(t)
+}
+
+// A run now gets the scheduled time of the last success, as a scheduled run
+// does, and it does not move it.
+func TestARunNowLeavesTheLastRunAndTheLastSuccess(t *testing.T) {
+	r := newRig(t)
+	r.v.put("Porter/Routines/Morning brief.md", brief)
+	r.start(t)
+	r.a.script(answer("Monday."), answer("Now."))
+	r.tick(t, "2026-10-19 06:30")
+	if len(r.a.ran()) != 1 {
+		t.Fatalf("runs = %+v", r.a.ran())
+	}
+	monday := time.Date(2026, 10, 19, 6, 30, 0, 0, r.ny)
+	if err := r.s.RunNow(t.Context(), "Morning brief"); err != nil {
+		t.Fatal(err)
+	}
+	r.s.WaitRuns()
+	specs := r.a.ran()
+	if len(specs) != 2 || !specs[1].LastRun.Equal(monday) {
+		t.Fatalf("runs = %+v", specs)
+	}
+	st, err := r.store.SeeRoutine(t.Context(), "Morning brief", r.s.now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.LastScheduled.Equal(monday) || !st.LastSuccess.Equal(monday) || st.LastOK == nil || !*st.LastOK {
+		t.Errorf("state = %+v, want Monday's run", st)
+	}
+}
+
+func TestARunNowNeedsARoutineTheSchedulerRuns(t *testing.T) {
+	r := newRig(t)
+	r.v.put("Porter/Routines/Morning brief.md", brief)
+	r.v.put("Porter/Routines/Bad.md", "---\nschedule: \"30 6 * * *\"\noutput: \"Notes/x.md\"\n---\nx")
+	// Before Start, the scheduler does not run.
+	r.s.Reload(t.Context())
+	if err := r.s.RunNow(t.Context(), "Morning brief"); code(err) != api.CodeUnavailable {
+		t.Errorf("before Start = %v", err)
+	}
+	r.start(t)
+	if err := r.s.RunNow(t.Context(), "Nope"); code(err) != api.CodeNotFound {
+		t.Errorf("an unknown name = %v", err)
+	}
+	if err := r.s.RunNow(t.Context(), "Bad"); code(err) != api.CodeConflict {
+		t.Errorf("an invalid routine = %v", err)
+	}
+	if len(r.a.ran()) != 0 {
+		t.Error("a routine that cannot run now did")
+	}
+	// Once porterd stops, a run now is unavailable.
+	ctx, cancel := context.WithCancel(t.Context())
+	s2 := &Scheduler{Notes: r.s.Notes, Agent: r.a, Store: r.store, Location: r.ny, Model: "local",
+		Now: func() time.Time { return time.Date(2026, 10, 19, 6, 0, 0, 0, r.ny) }}
+	s2.Start(ctx)
+	cancel()
+	s2.Wait()
+	if err := s2.RunNow(t.Context(), "Morning brief"); code(err) != api.CodeUnavailable {
+		t.Errorf("after porterd stopped = %v", err)
+	}
+}
+
+func TestARunNowNeverOverlapsItself(t *testing.T) {
+	r := newRig(t)
+	r.v.put("Porter/Routines/Morning brief.md", brief)
+	r.start(t)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	r.a.script(func(context.Context) (string, []api.Card, error) {
+		close(started)
+		<-release
+		return "Held.", nil, nil
+	})
+	if err := r.s.RunNow(t.Context(), "Morning brief"); err != nil {
+		t.Fatal(err)
+	}
+	<-started
+	if err := r.s.RunNow(t.Context(), "Morning brief"); code(err) != api.CodeConflict {
+		t.Errorf("a second run now = %v", err)
+	}
+	rs, err := r.s.Routines(t.Context())
+	if err != nil || len(rs) != 1 || !rs[0].Running {
+		t.Fatalf("routines = %+v, %v", rs, err)
+	}
+	// Its scheduled time comes while the run now is going: that time is skipped.
+	at := time.Date(2026, 10, 19, 6, 30, 0, 0, r.ny)
+	r.mu.Lock()
+	r.now = at
+	r.mu.Unlock()
+	r.s.Tick(t.Context(), at)
+	close(release)
+	r.s.WaitRuns()
+	var skipped, ran int
+	for _, e := range r.entries(t) {
+		switch e.Kind {
+		case api.EntrySkipped:
+			skipped++
+		case api.EntryRun:
+			ran++
+		}
+	}
+	if skipped != 1 || ran != 1 || len(r.a.ran()) != 1 {
+		t.Fatalf("skipped %d, ran %d, runs %d", skipped, ran, len(r.a.ran()))
+	}
+	if rs, _ := r.s.Routines(t.Context()); rs[0].Running {
+		t.Error("the routine is still marked running")
+	}
+}
+
+func TestARunNowIsNotRetriedWhenTheModelIsUnavailable(t *testing.T) {
+	r := newRig(t)
+	r.v.put("Porter/Routines/Morning brief.md", brief)
+	r.start(t)
+	r.a.script(func(context.Context) (string, []api.Card, error) {
+		return "", nil, fmt.Errorf("the model: %w", &inference.Error{Status: 503, Code: "provider_unavailable"})
+	})
+	if err := r.s.RunNow(t.Context(), "Morning brief"); err != nil {
+		t.Fatal(err)
+	}
+	r.s.WaitRuns()
+	es := r.entries(t)
+	if len(es) != 1 || es[0].OK || es[0].Text != "Run now. Failed: the model is unavailable." {
+		t.Fatalf("activity = %+v", es)
+	}
+	if turn := r.lastTurn(t); turn.Text != "**Morning brief** (run now) failed: the model is unavailable. Nothing was written." {
+		t.Errorf("the thread line = %q", turn.Text)
+	}
+	if len(r.a.ran()) != 1 {
+		t.Fatalf("runs = %d", len(r.a.ran()))
+	}
+	// No retry waits for the provider.
+	r.tick(t, "2026-10-19 06:15")
+	if len(r.a.ran()) != 1 {
+		t.Error("a run now was retried")
+	}
+}
+
+func TestADisabledRoutineCanRunNow(t *testing.T) {
+	r := newRig(t)
+	r.v.put("Porter/Routines/Morning brief.md", strings.Replace(brief, "---\nWrite", "enabled: false\n---\nWrite", 1))
+	r.start(t)
+	r.a.script(answer("Asked for."))
+	if err := r.s.RunNow(t.Context(), "Morning brief"); err != nil {
+		t.Fatal(err)
+	}
+	r.s.WaitRuns()
+	if len(r.a.ran()) != 1 {
+		t.Fatal("a disabled routine did not run now")
+	}
+	if _, ok := r.v.get("Porter/Briefs/2026-10-19.md"); !ok {
+		t.Error("the run now wrote no output note")
+	}
+}
+
+// runningSeen records, for each run's Activity entry, whether the routines
+// still said that the routine was running as the entry arrived. A view
+// rereads activity.routines then, so it must not see a stuck "running".
+type runningSeen struct {
+	mu   sync.Mutex
+	vals []bool
+	err  error
+}
+
+// on returns the OnEntry func that records what s.Routines says.
+func (w *runningSeen) on(s *Scheduler) func(api.Entry) {
+	return func(e api.Entry) {
+		if e.Kind != api.EntryRun {
+			return
+		}
+		rs, err := s.Routines(context.Background())
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		if err != nil {
+			w.err = err
+			return
+		}
+		for _, r := range rs {
+			if r.Name == e.Routine {
+				w.vals = append(w.vals, r.Running)
+			}
+		}
+	}
+}
+
+// want fails unless one run was seen, and it was not running by then.
+func (w *runningSeen) want(t *testing.T) {
+	t.Helper()
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.err != nil {
+		t.Fatalf("routines as an entry arrived: %v", w.err)
+	}
+	if len(w.vals) != 1 || w.vals[0] {
+		t.Errorf("the routines as a run's entry arrived showed running = %v, want [false]", w.vals)
+	}
+}
+
+// A run that has recorded its entry ends before a run now that started in
+// between; when it ends it must not clear that new run's mark, or a third
+// run could start beside it. The first run is called directly, so the test
+// knows the deferred clear has run when it returns; no sleep is needed.
+func TestARunEndingLeavesANewRunNowsMark(t *testing.T) {
+	r := newRig(t)
+	r.v.put("Porter/Routines/Morning brief.md", brief)
+	r.start(t)
+	release := make(chan struct{})
+	started := make(chan struct{})
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
+	t.Cleanup(unblock)
+	r.a.script(answer("The first run."), func(context.Context) (string, []api.Card, error) {
+		close(started)
+		<-release
+		return "The second run.", nil, nil
+	})
+	var secondErr error
+	entries := 0
+	r.s.OnEntry = func(e api.Entry) {
+		if e.Kind != api.EntryRun || e.Routine != "Morning brief" {
+			return
+		}
+		entries++
+		if entries == 1 {
+			secondErr = r.s.RunNow(context.Background(), "Morning brief")
+		}
+	}
+	// The first run, marked running as start does, to its end.
+	r.s.mu.Lock()
+	rr, ok := r.s.byName("Morning brief")
+	if r.s.running == nil {
+		r.s.running = map[string]bool{}
+	}
+	r.s.running["Morning brief"] = true
+	r.s.mu.Unlock()
+	if !ok {
+		t.Fatal("no routine to run")
+	}
+	r.s.run(t.Context(), rr, r.s.now(), true)
+	if secondErr != nil {
+		t.Fatalf("a run now of a routine whose run has ended = %v", secondErr)
+	}
+	<-started // the second run is in the agent, and holds the mark
+	if err := r.s.RunNow(t.Context(), "Morning brief"); code(err) != api.CodeConflict {
+		t.Errorf("a third run now beside the second = %v", err)
+	}
+	unblock()
+	r.s.WaitRuns()
+	if rs, err := r.s.Routines(t.Context()); err != nil || len(rs) != 1 || rs[0].Running {
+		t.Errorf("after both runs: routines = %+v, %v", rs, err)
 	}
 }

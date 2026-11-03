@@ -111,6 +111,24 @@ Link every item.
    output. Its cards are what the run did and proposes: drafts, notes
    written, and approvals. It also records an Activity entry.
 
+### Run now
+
+The owner can start a routine at once from the Routines list in Activity
+(`activity.run`, [design/overview.md](../design/overview.md), The UI),
+without waiting for its next time.
+
+1. **Rights:** a run now has a scheduled run's rights, tools, limits,
+   prompt (with the time of the last success) and output. It is the same
+   run; only its time differs.
+2. **When:** its time is the moment it starts, so its output note's
+   `run:` is that moment, RFC 3339 in the routine's zone.
+3. **Which routines:** a disabled routine can run now, because the owner
+   asked for it. An invalid routine cannot.
+4. **Reporting:** it posts a thread line and records an Activity entry
+   that say it is a run now, for example `**Morning brief** (run now):
+   [Porter/Briefs/2026-11-03.md](…)` and `Run now. Wrote
+   Porter/Briefs/2026-11-03.md.`.
+
 ## Rules
 
 - A routine's prompt cannot widen what a run may do. porterd gives runs
@@ -130,6 +148,14 @@ Link every item.
 - **Missed runs:** if porterd was down when a routine was due, it runs that
   routine once at start, if the missed time is less than 6 hours old. An
   older miss is noted, not run.
+- **A run now moves nothing:** a run now does not move the routine's last
+  success, nor its last scheduled run. Only scheduled runs move them, so
+  missed-run catch-up sees the scheduled times only.
+- **One run at a time:** a routine never has two active runs. A run now
+  while a run of it is active, or waits for its provider, gets `conflict`.
+  A scheduled time that comes during a run now is skipped and noted.
+- **A run now is not retried:** when the model's provider is unavailable,
+  it fails at once, and it says that the model is unavailable.
 - **Run limits:** a run ends, as failed, after 10 minutes or 40 tool calls.
   A failed run writes no output note, and its thread line says why.
 - **Overwriting:** an output note is replaced only if its frontmatter names

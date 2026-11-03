@@ -118,6 +118,8 @@ export interface Routine {
   /** When it last ran, RFC 3339 in UTC. */
   last?: string;
   lastOk?: boolean;
+  /** Whether a run of it is active now, scheduled or run now. */
+  running?: boolean;
 }
 
 /** JSON-RPC error codes (schema/rpc/errors.yaml), and -1 for a call made without a connection. */
@@ -169,6 +171,8 @@ export interface ThreadAPI {
 export interface ActivityAPI {
   list(p: { before?: number; limit?: number }): Promise<EntryList>;
   routines(): Promise<Routine[]>;
+  /** Runs a routine now, with the rights of a scheduled run. */
+  run(name: string): Promise<void>;
 }
 
 /** normalizeTurn gives a turn from the wire its array and string fields, whatever a nil slice encoded as. */
@@ -211,6 +215,9 @@ export function activityAPI(t: Transport): ActivityAPI {
     routines: async () => {
       const r = await t.call<Routine[]>("activity.routines", {});
       return Array.isArray(r) ? r : [];
+    },
+    run: async (name) => {
+      await t.call<unknown>("activity.run", { name });
     },
   };
 }

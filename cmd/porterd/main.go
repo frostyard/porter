@@ -145,6 +145,7 @@ func run(ctx context.Context, args []string) error {
 
 	// Routines need notes, where they live and where their output goes.
 	var routines func(context.Context) ([]api.Routine, error)
+	var runRoutine func(ctx context.Context, name string) error
 	if notes != nil {
 		sched := &routine.Scheduler{Notes: notes, Agent: ag, Store: store, Location: loc, Model: cfg.RoutineAlias,
 			OnEntry: svc.EmitActivity, Log: log.With("part", "routines")}
@@ -152,11 +153,12 @@ func run(ctx context.Context, args []string) error {
 		defer sched.Wait()
 		defer cancel() // stop the scheduler before waiting for it
 		routines = sched.Routines
+		runRoutine = sched.RunNow
 	} else {
 		log.Warn("no notes token: routines cannot run")
 	}
 
-	app, err := newApp(log, svc, service.NewActivity(store, routines))
+	app, err := newApp(log, svc, service.NewActivity(store, routines, runRoutine))
 	if err != nil {
 		return err
 	}

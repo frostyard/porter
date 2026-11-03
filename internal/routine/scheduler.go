@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net"
 	"sort"
 	"strings"
@@ -60,6 +61,7 @@ type Scheduler struct {
 	Now     func() time.Time
 
 	mu       sync.Mutex
+	base     context.Context    // Start's ctx: a run now uses it, never a request's
 	routines map[string]Routine // by path
 	listed   map[string]string  // path → modified, as list_notes gave it
 	running  map[string]bool    // by name
@@ -94,6 +96,9 @@ func (s *Scheduler) log() *slog.Logger {
 // than 6 hours ago), and then checks every minute until ctx ends.
 func (s *Scheduler) Start(ctx context.Context) {
 	now := s.now()
+	s.mu.Lock()
+	s.base = ctx
+	s.mu.Unlock()
 	s.Reload(ctx)
 	s.catchUp(ctx, now)
 	s.mu.Lock()
@@ -143,7 +148,7 @@ func (s *Scheduler) Tick(ctx context.Context, now time.Time) {
 	}
 	s.mu.Unlock()
 	for _, rt := range again {
-		s.launch(ctx, rt.r, rt.scheduled)
+		s.launch(ctx, rt.r, rt.scheduled, false)
 	}
 	for _, r := range rs {
 		if !r.Valid() || !r.Enabled {
@@ -213,15 +218,61 @@ func (s *Scheduler) start(ctx context.Context, r Routine, t time.Time) {
 	}
 	s.running[r.Name] = true
 	s.mu.Unlock()
-	s.launch(ctx, r, t)
+	s.launch(ctx, r, t, false)
 }
 
-// launch runs r in the background; r is marked running.
-func (s *Scheduler) launch(ctx context.Context, r Routine, t time.Time) {
-	s.runs.Go(func() { s.run(ctx, r, t) })
+// RunNow runs the routine named name now, with the rights of a scheduled
+// run (specs/routines.md, Run now). It returns once the run has started;
+// the run reports through the thread and Activity as a scheduled run does.
+// It runs on Start's context, not on ctx, which ends with the request.
+func (s *Scheduler) RunNow(ctx context.Context, name string) error {
+	s.mu.Lock()
+	if s.base == nil || s.base.Err() != nil {
+		s.mu.Unlock()
+		return api.Errorf(api.CodeUnavailable, "the scheduler is not running")
+	}
+	r, ok := s.byName(name)
+	if !ok {
+		s.mu.Unlock()
+		return api.Errorf(api.CodeNotFound, "no routine is named %q", name)
+	}
+	if !r.Valid() {
+		s.mu.Unlock()
+		return api.Errorf(api.CodeConflict, "%s is invalid: %v", name, r.Err)
+	}
+	if s.running[name] {
+		s.mu.Unlock()
+		return api.Errorf(api.CodeConflict, "%s is already running", name)
+	}
+	if s.running == nil {
+		s.running = map[string]bool{}
+	}
+	s.running[name] = true
+	base := s.base
+	s.mu.Unlock()
+	s.launch(base, r, s.now(), true)
+	return nil
 }
 
-func (s *Scheduler) run(ctx context.Context, r Routine, scheduled time.Time) {
+// byName finds a routine by name; s.mu is held.
+func (s *Scheduler) byName(name string) (Routine, bool) {
+	for _, r := range s.routines {
+		if r.Name == name {
+			return r, true
+		}
+	}
+	return Routine{}, false
+}
+
+// launch runs r in the background; r is marked running. A manual run is one
+// the owner started now, not one a schedule started.
+func (s *Scheduler) launch(ctx context.Context, r Routine, t time.Time, manual bool) {
+	s.runs.Go(func() { s.run(ctx, r, t, manual) })
+}
+
+// run runs r for its time scheduled. A manual run is not retried, and it does
+// not move the routine's last run or its last success: only scheduled runs do.
+func (s *Scheduler) run(ctx context.Context, r Routine, scheduled time.Time, manual bool) {
 	rctx, cancel := context.WithTimeout(ctx, RunTimeout)
 	defer cancel()
 	output := r.OutputPath(scheduled)
@@ -233,24 +284,39 @@ func (s *Scheduler) run(ctx context.Context, r Routine, scheduled time.Time) {
 		lastRun = st.LastSuccess
 	}
 	answer, cards, err := s.Agent.Run(rctx, agent.RunSpec{Name: r.Name, Prompt: r.Prompt, Alias: r.Model, Thinking: r.Thinking, Output: output, LastRun: lastRun})
-	if err != nil && unavailable(err) && ctx.Err() == nil {
-		if now := s.now(); now.Add(RetryEvery).Sub(scheduled) <= RetryFor {
-			s.log().Warn("the model is unavailable; the routine will retry", "routine", r.Name, "in", RetryEvery, "err", err)
-			s.mu.Lock()
-			if s.retries == nil {
-				s.retries = map[string]retry{}
+	if err != nil && unavailable(err) {
+		switch {
+		case manual:
+			// A run now is not retried: it fails at once (specs/routines.md, Run now).
+			s.log().Warn("the model is unavailable; a run now is not retried", "routine", r.Name, "err", err)
+			err = errors.New("the model is unavailable")
+		case ctx.Err() != nil:
+		default:
+			if now := s.now(); now.Add(RetryEvery).Sub(scheduled) <= RetryFor {
+				s.log().Warn("the model is unavailable; the routine will retry", "routine", r.Name, "in", RetryEvery, "err", err)
+				s.mu.Lock()
+				if s.retries == nil {
+					s.retries = map[string]retry{}
+				}
+				s.retries[r.Name] = retry{r: r, scheduled: scheduled, at: now.Add(RetryEvery)}
+				s.mu.Unlock()
+				return // still running: its next times are skipped while it waits
 			}
-			s.retries[r.Name] = retry{r: r, scheduled: scheduled, at: now.Add(RetryEvery)}
-			s.mu.Unlock()
-			return // still running: its next times are skipped while it waits
+			err = fmt.Errorf("the model was unavailable for 2 hours: %w", err)
 		}
-		err = fmt.Errorf("the model was unavailable for 2 hours: %w", err)
 	}
-	defer func() {
-		s.mu.Lock()
-		delete(s.running, r.Name)
-		s.mu.Unlock()
-	}()
+	// The mark is cleared exactly once, by this run: a new run now may start
+	// between the entry being recorded and this run returning, and its mark
+	// is not this run's to clear.
+	stopped := false
+	done := func() {
+		if stopped {
+			return
+		}
+		stopped = true
+		s.stop(r.Name)
+	}
+	defer done()
 	if ctx.Err() != nil {
 		return // porterd is stopping; the run is retried as missed at start
 	}
@@ -266,15 +332,20 @@ func (s *Scheduler) run(ctx context.Context, r Routine, scheduled time.Time) {
 			err = fmt.Errorf("the output note could not be written: %w", err)
 		}
 	}
-	line, text := s.lines(r, answer, url, written, acts, err)
+	line, text := s.lines(r, answer, url, written, acts, err, manual)
 	turn, perr := s.Agent.Post(context.WithoutCancel(ctx), api.Turn{Role: api.RoleNotice, Text: line, Cards: acts, Done: true})
 	if perr != nil {
 		s.log().Error("post a routine's line", "routine", r.Name, "err", perr)
 	}
-	s.record(ctx, api.Entry{Kind: api.EntryRun, Routine: r.Name, OK: err == nil, Text: text, URL: url, Turn: turn.ID, Cards: acts})
-	if err := s.Store.SetRan(context.WithoutCancel(ctx), r.Name, scheduled, err == nil); err != nil {
-		s.log().Error("record a run", "routine", r.Name, "err", err)
+	if !manual {
+		if err := s.Store.SetRan(context.WithoutCancel(ctx), r.Name, scheduled, err == nil); err != nil {
+			s.log().Error("record a run", "routine", r.Name, "err", err)
+		}
 	}
+	// The run is over before its entry is recorded: a view that rereads the
+	// routines when the entry arrives must not see it as running.
+	done()
+	s.record(ctx, api.Entry{Kind: api.EntryRun, Routine: r.Name, OK: err == nil, Text: text, URL: url, Turn: turn.ID, Cards: acts})
 	if err != nil {
 		s.log().Warn("a routine failed", "routine", r.Name, "err", err)
 	} else {
@@ -282,8 +353,20 @@ func (s *Scheduler) run(ctx context.Context, r Routine, scheduled time.Time) {
 	}
 }
 
-// lines are a run's thread line and its Activity text.
-func (s *Scheduler) lines(r Routine, answer, url, written string, acts []api.Card, err error) (string, string) {
+// stop clears a routine's running mark, if it is set.
+func (s *Scheduler) stop(name string) {
+	s.mu.Lock()
+	delete(s.running, name)
+	s.mu.Unlock()
+}
+
+// lines are a run's thread line and its Activity text; a manual run says
+// that it is one.
+func (s *Scheduler) lines(r Routine, answer, url, written string, acts []api.Card, err error, manual bool) (string, string) {
+	mark, prefix := "", ""
+	if manual {
+		mark, prefix = " (run now)", "Run now. "
+	}
 	if err != nil {
 		why := err.Error()
 		switch {
@@ -292,7 +375,7 @@ func (s *Scheduler) lines(r Routine, answer, url, written string, acts []api.Car
 		case errors.Is(err, agent.ErrTooManyCalls):
 			why = "it called more than 40 tools"
 		}
-		return fmt.Sprintf("**%s** failed: %s. Nothing was written.", r.Name, why), "Failed: " + why + "."
+		return fmt.Sprintf("**%s**%s failed: %s. Nothing was written.", r.Name, mark, why), prefix + "Failed: " + why + "."
 	}
 	waiting := 0
 	for _, c := range acts {
@@ -309,13 +392,13 @@ func (s *Scheduler) lines(r Routine, answer, url, written string, acts []api.Car
 		tail = fmt.Sprintf(" %d actions wait for your approval.", waiting)
 	}
 	if written == "" {
-		return fmt.Sprintf("**%s**\n\n%s%s", r.Name, answer, tail), "Ran." + tail
+		return fmt.Sprintf("**%s**%s\n\n%s%s", r.Name, mark, answer, tail), prefix + "Ran." + tail
 	}
 	link := written
 	if url != "" {
 		link = fmt.Sprintf("[%s](%s)", written, url)
 	}
-	return fmt.Sprintf("**%s**: %s%s", r.Name, link, tail), "Wrote " + written + "." + tail
+	return fmt.Sprintf("**%s**%s: %s%s", r.Name, mark, link, tail), prefix + "Wrote " + written + "." + tail
 }
 
 // outputHead is an output note's frontmatter.
@@ -526,12 +609,13 @@ func (s *Scheduler) read(ctx context.Context, n listEntry) {
 func (s *Scheduler) Routines(ctx context.Context) ([]api.Routine, error) {
 	s.mu.Lock()
 	rs := s.sorted()
+	running := maps.Clone(s.running)
 	s.mu.Unlock()
 	now := s.now()
 	out := make([]api.Routine, 0, len(rs))
 	for _, r := range rs {
 		a := api.Routine{Name: r.Name, Path: r.Path, URL: r.URL, Valid: r.Valid(), Schedule: r.Schedule,
-			Timezone: r.Zone, Output: r.Output, Enabled: r.Enabled}
+			Timezone: r.Zone, Output: r.Output, Enabled: r.Enabled, Running: running[r.Name]}
 		if r.Err != nil {
 			a.Error = r.Err.Error()
 		}
