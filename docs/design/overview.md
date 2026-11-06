@@ -290,9 +290,48 @@ that call's own `RPCError`, so Porter reads the code it keeps.
     The system prompt tells the model to say so if the owner asks for them.
 - **Revoking an app's token** in lodge cuts Porter off from that app at
   once. The rest keep working.
-- **Update, roll back and limits:** for readers, in the [README](../../README.md#update).
+- **Update and roll back:** for readers, in the
+  [packaging runbook](../../packaging/README.md#update). Limits, and what can go
+  wrong, are in [Limits](#limits).
 - **Logs:** each tool call is logged with its app, tool, status and
   duration, never its content. lodge logs inference use as app `porter`.
+
+## Limits
+
+What Porter does not do:
+
+- It never sends mail or posts anything. It drafts, and you send. No token
+  carries a send right
+  ([ADR-0004](../adr/0004-porter-drafts-and-the-owner-sends.md)).
+- It writes notes only in `Porter/`, and appends to the daily note. It never
+  writes `Porter/Routines/`. It writes memory only when you ask
+  ([ADR-0005](../adr/0005-memory-and-routines-live-in-the-vault.md)).
+- Routines get only the unattended tools: reads, drafts, and notes in
+  `Porter/` outside `Porter/Routines/`. Other actions become approval cards.
+- It reads frostread read-only
+  ([ADR-0007](../adr/0007-porter-reads-frostread-read-only.md)). It writes
+  no calendar events.
+- It owns none of your data. It reaches the apps only through their MCP
+  endpoints, with lodge tokens
+  ([ADR-0003](../adr/0003-porter-is-a-lodge-app-that-owns-no-data.md)). It
+  runs only as lodge's `porter` app. The GitHub manager is not built.
+
+What can go wrong:
+
+- The model can be wrong. Read a draft before you send it.
+- Text from other people (mail, notes, articles) reaches the model as data,
+  not as instructions. This lowers the risk. The lack of a send right limits
+  the harm. It does not make an attack impossible.
+- An app with no token only warns in the log, and Porter leaves it out. Its
+  tools are then missing.
+- An app that is down loses its tools until it is back. Porter leaves them
+  out, and its prompt tells the model to say so if you ask for them.
+- Without lodge's inference, chat says that the model is unavailable, and
+  routines retry.
+- A reply stops at 40 tool calls. A routine run that passes 40 fails.
+- porterd refuses unknown keys in `/etc/porter/porter.json`, and does not
+  start.
+- Revoking an app's token in lodge cuts Porter off from that app at once.
 
 ## References
 
