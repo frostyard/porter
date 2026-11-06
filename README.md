@@ -19,8 +19,10 @@ it runs scheduled prompts for you. It runs on lodge's host as lodge's
   frostread, only through each app's MCP endpoint, with a lodge token per
   app. It owns none of your data
   ([ADR-0003](docs/adr/0003-porter-is-a-lodge-app-that-owns-no-data.md)).
-- **It drafts, and you send.** No token carries a send or post right; any
-  other change becomes an approval card for you
+- **It drafts, and you send.** No token carries a send or post right. In
+  chat it can also flag and move mail, and create or complete tasks, when
+  you ask. A routine only reads, drafts and writes notes in `Porter/`;
+  anything else it wants waits as an approval card for you
   ([ADR-0004](docs/adr/0004-porter-drafts-and-the-owner-sends.md)).
 - **One continuous thread.** Every conversation is one thread, with its
   full-text search and a rolling summary

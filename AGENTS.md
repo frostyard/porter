@@ -143,15 +143,16 @@ verify` when one of these files breaks:
 - The instruction symlinks above (B1). Edit `AGENTS.md`, never a link.
 - `.memory/corrections.jsonl` (B2): 1 JSON object per line with exactly
   `date`, `scope`, `correction`, `evidence` and `promoted_to`. Append only:
-  never edit or remove a line (no test checks this). The file may be empty,
-  as it is now: Porter has no correction yet. A fix of a blocking review
-  point adds its guard and 1 line.
+  never edit or remove a line (no test checks this). An empty file is
+  valid. A fix of a blocking review point adds its guard and 1 line.
 - `.github/risk-paths.json` (B6, core ADR-0068): a PR that touches a listed
   path gets `risk:high` from `.github/workflows/risk-paths.yml`. Its PR body
   names each matched path and why the change is safe. A new release
   workflow, packaging script, unit, credential store, auth check or socket
   admission joins the list in the PR that adds it; a glob that matches no
-  file fails.
+  file fails. `TestRiskMarkers` also fails when a Go file with a method's
+  callers, the unattended tool set, a file mode, the private socket or the
+  schema matches no glob.
 - `.github/dependabot.yml` (B13): 1 entry for each manifest (`go.mod`,
   `web/package.json`). A new manifest gets an entry.
 
@@ -161,6 +162,13 @@ The root `README.md` follows core's README spec for the kind `service`
 (B17, core ADR-0072): core's `frostyard-readme` skill checks it, in the nsl
 machine. No `CODEOWNERS` file (B15), and no other agent framework's tree
 (B16).
+
+A README, `SECURITY.md` or design line that says what Porter may do must
+keep ADR-0004's 2 modes apart. In chat, Porter may also flag and move mail
+and create or complete tasks when the owner asks; only a routine turns an
+action outside the unattended tools into an approval card. Check the claim
+against `internal/agent/agent.go` (the approval branch) before you write
+it.
 
 ## Repository boundary
 

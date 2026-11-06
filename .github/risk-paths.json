@@ -50,16 +50,16 @@
       "why": "auth: the app contract's socket rules (kittest) that porterd must pass"
     },
     {
-      "glob": "{api/api.go,internal/rpcserver/server.go}",
-      "why": "auth: the caller kind of each connection (local, session, agent) and the private socket's callers"
+      "glob": "{api/api.go,api/rpc.go,api/thread.go,api/activity.go,internal/rpcserver/server.go}",
+      "why": "auth: the caller kind of each connection (local, session, agent), and the callers each RPC, thread and activity method admits"
     },
     {
       "glob": "internal/tools/{classify,registry,tools}.go",
       "why": "auth: what each tool may do (no send, frostread read-only), the unattended tools of routines, and the token per app"
     },
     {
-      "glob": "internal/agent/{agent,run}.go",
-      "why": "auth: the approval cards for changes, and the unattended routine run that gets only the unattended tools"
+      "glob": "internal/agent/{agent,run,own}.go",
+      "why": "auth: the approval cards, the unattended routine run, Porter's own tools (remember) and the check that a card can be confirmed"
     },
     {
       "glob": "internal/routine/parse.go",

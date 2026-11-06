@@ -220,9 +220,8 @@ func correctionsLines(data string) []string {
 
 // TestCorrectionsInbox guards row B2 of frostyard/core
 // docs/specs/repository-baseline.md: .memory/corrections.jsonl holds one JSON
-// object per line, with exactly the 5 fields of a correction. Porter has no
-// correction yet, so the file may be empty, as core's
-// scripts/check-corrections.mjs accepts it.
+// object per line, with exactly the 5 fields of a correction. An empty file
+// is valid too, as core's scripts/check-corrections.mjs accepts it.
 func TestCorrectionsInbox(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", ".memory", "corrections.jsonl"))
 	if err != nil {
@@ -350,20 +349,24 @@ var governedPaths = []string{
 	"cmd/porterd/main.go",
 	"cmd/porterd/main_test.go",
 	"api/api.go",
+	"api/rpc.go",
+	"api/thread.go",
+	"api/activity.go",
 	"internal/rpcserver/server.go",
 	"internal/tools/classify.go",
 	"internal/tools/registry.go",
 	"internal/tools/tools.go",
 	"internal/agent/agent.go",
 	"internal/agent/run.go",
+	"internal/agent/own.go",
 	"internal/routine/parse.go",
 	"internal/thread/store.go",
 }
 
-// TestRiskPaths guards row B6 of frostyard/core
-// docs/specs/repository-baseline.md: .github/risk-paths.json lists every
-// governed path of the repository, with a reason, and no stale glob.
-func TestRiskPaths(t *testing.T) {
+// readRiskPaths reads and parses .github/risk-paths.json strictly: an unknown
+// member fails the test, so a new field of the file needs this test.
+func readRiskPaths(t *testing.T) riskPathFile {
+	t.Helper()
 	data, err := os.ReadFile(filepath.Join("..", "..", ".github", "risk-paths.json"))
 	if err != nil {
 		t.Fatalf(".github/risk-paths.json: %v", err)
@@ -372,6 +375,39 @@ func TestRiskPaths(t *testing.T) {
 	if err := json.Unmarshal(data, &cfg, json.RejectUnknownMembers(true)); err != nil {
 		t.Fatalf(".github/risk-paths.json: %v", err)
 	}
+	return cfg
+}
+
+// riskMarkers are the lines of Go source that mark a file as a risk path: a
+// method's callers, the unattended tools of routines, a file's mode, the
+// private socket, and the thread database's schema.
+var riskMarkers = []string{
+	"[]CallerKind{",
+	".Unattended()",
+	".Chmod(",
+	"0o600",
+	"0o700",
+	"ALTER TABLE",
+	"CREATE TABLE",
+	"jsonrpc.Listen",
+}
+
+// riskMarker returns the first marker of riskMarkers that src holds, in the
+// order of the list; no marker means plain source.
+func riskMarker(src string) (string, bool) {
+	for _, marker := range riskMarkers {
+		if strings.Contains(src, marker) {
+			return marker, true
+		}
+	}
+	return "", false
+}
+
+// TestRiskPaths guards row B6 of frostyard/core
+// docs/specs/repository-baseline.md: .github/risk-paths.json lists every
+// governed path of the repository, with a reason, and no stale glob.
+func TestRiskPaths(t *testing.T) {
+	cfg := readRiskPaths(t)
 	if cfg.SchemaVersion != 1 {
 		t.Errorf("schema_version = %d, want 1", cfg.SchemaVersion)
 	}
@@ -424,6 +460,65 @@ func TestRiskPaths(t *testing.T) {
 		}
 	}
 	t.Logf("%d globs; %d required paths listed; %d files searched", len(globs), len(want), len(files))
+}
+
+// TestRiskMarkers guards the risk list against the next omission: a Go file
+// that admits a caller to a method, holds the unattended tool set, sets a
+// file's mode, opens the private socket or holds the thread database's schema
+// is an auth, credential or schema check, whatever package it is in. A glob
+// that names files misses such a file when a function moves to a new one.
+func TestRiskMarkers(t *testing.T) {
+	cfg := readRiskPaths(t)
+	globs := make([]string, 0, len(cfg.Paths))
+	for _, p := range cfg.Paths {
+		globs = append(globs, p.Glob)
+	}
+	marked := 0
+	for _, f := range repoFiles(t) {
+		if !strings.HasSuffix(f, ".go") || strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join("..", "..", filepath.FromSlash(f)))
+		if err != nil {
+			t.Errorf("%s: %v", f, err)
+			continue
+		}
+		marker, ok := riskMarker(string(data))
+		if !ok {
+			continue
+		}
+		marked++
+		if !matchAny(globs, f) {
+			t.Errorf("%s has %s (an auth, credential or schema check); .github/risk-paths.json must list it", f, marker)
+		}
+	}
+	t.Logf("%d globs; %d Go files with a marker", len(globs), marked)
+}
+
+// TestRiskMarker checks the marker list on source that holds each marker, and
+// on plain source.
+func TestRiskMarker(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+		want string
+	}{
+		{"method admission", "callers := []CallerKind{CallerLocal, CallerSession}", "[]CallerKind{"},
+		{"unattended tools", "if !unattended || t.Kind.Unattended() {", ".Unattended()"},
+		{"file mode by Chmod", "if err := tmp.Chmod(0o644); err != nil {", ".Chmod("},
+		{"token file mode", "os.WriteFile(path, data, 0o600)", "0o600"},
+		{"state directory mode", "os.MkdirAll(state, 0o700)", "0o700"},
+		{"column migration", "ALTER TABLE routines ADD COLUMN last_success TEXT", "ALTER TABLE"},
+		{"schema", "CREATE TABLE IF NOT EXISTS turns (", "CREATE TABLE"},
+		{"private socket", "private, err := jsonrpc.Listen(socket, log)", "jsonrpc.Listen"},
+		{"first marker in the list order", "if err := tmp.Chmod(0o600); err != nil {", ".Chmod("},
+		{"plain source", "package api\n\nfunc Serve() {}\n", ""},
+	} {
+		got, ok := riskMarker(tc.src)
+		if got != tc.want || ok != (tc.want != "") {
+			t.Errorf("%s: riskMarker(%q) = %q, %v, want %q", tc.name, tc.src, got, ok, tc.want)
+		}
+	}
 }
 
 // missingPaths returns each of required that is not in files, in order. A
@@ -755,11 +850,18 @@ func TestMatchGlob(t *testing.T) {
 		{"internal/tools/{classify,registry,tools}.go", "internal/tools/tools.go", true},
 		{"internal/tools/{classify,registry,tools}.go", "internal/tools/tools_test.go", false},
 		{"internal/tools/{classify,registry,tools}.go", "internal/tools/classify_test.go", false},
-		{"{api/api.go,internal/rpcserver/server.go}", "api/api.go", true},
-		{"{api/api.go,internal/rpcserver/server.go}", "internal/rpcserver/server.go", true},
-		{"{api/api.go,internal/rpcserver/server.go}", "api/rpc.go", false},
-		{"internal/agent/{agent,run}.go", "internal/agent/run.go", true},
-		{"internal/agent/{agent,run}.go", "internal/agent/agent_test.go", false},
+		{"{api/api.go,api/rpc.go,api/thread.go,api/activity.go,internal/rpcserver/server.go}", "api/api.go", true},
+		{"{api/api.go,api/rpc.go,api/thread.go,api/activity.go,internal/rpcserver/server.go}", "api/rpc.go", true},
+		{"{api/api.go,api/rpc.go,api/thread.go,api/activity.go,internal/rpcserver/server.go}", "api/thread.go", true},
+		{"{api/api.go,api/rpc.go,api/thread.go,api/activity.go,internal/rpcserver/server.go}", "api/activity.go", true},
+		{"{api/api.go,api/rpc.go,api/thread.go,api/activity.go,internal/rpcserver/server.go}", "internal/rpcserver/server.go", true},
+		{"{api/api.go,api/rpc.go,api/thread.go,api/activity.go,internal/rpcserver/server.go}", "api/api_test.go", false},
+		{"{api/api.go,api/rpc.go,api/thread.go,api/activity.go,internal/rpcserver/server.go}", "api/other.go", false},
+		{"internal/agent/{agent,run,own}.go", "internal/agent/agent.go", true},
+		{"internal/agent/{agent,run,own}.go", "internal/agent/run.go", true},
+		{"internal/agent/{agent,run,own}.go", "internal/agent/own.go", true},
+		{"internal/agent/{agent,run,own}.go", "internal/agent/agent_test.go", false},
+		{"internal/agent/{agent,run,own}.go", "internal/agent/prompt.go", false},
 		{"{mise.toml,mise.lock}", "mise.toml", true},
 		{"{mise.toml,mise.lock}", "mise.lock", true},
 		{"{mise.toml,mise.lock}", "mise.tom", false},
