@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "paths": [
+    {
+      "glob": ".github/risk-paths.json",
+      "why": "governance: the high-risk path list"
+    },
+    {
+      "glob": ".github/workflows/**",
+      "why": "governance: CI, the risk-paths caller and token permissions"
+    },
+    {
+      "glob": ".github/workflows/release.yml",
+      "why": "publication: the .deb release, its attestation and the GitHub release"
+    },
+    {
+      "glob": "Makefile",
+      "why": "governance: the verify, check and ci gate, and make bump, which tags a release"
+    },
+    {
+      "glob": "{mise.toml,mise.lock}",
+      "why": "governance: the checksummed pins of golangci-lint, svu and nFPM"
+    },
+    {
+      "glob": ".svu.yml",
+      "why": "publication: the version rule of Porter's vX.Y.Z tags"
+    },
+    {
+      "glob": "internal/{workflowcheck,packagecheck}/**",
+      "why": "governance: the tests that hold the workflows (ADR-0021), the baseline files, the staged tree and the .deb"
+    },
+    {
+      "glob": "packaging/{nfpm.yaml,deb-check.py}",
+      "why": "publication: the contents of the .deb and its check"
+    },
+    {
+      "glob": "packaging/lodge/**",
+      "why": "publication: the app manifest, the socket and service units, the system user frostporter, and stage.sh"
+    },
+    {
+      "glob": "internal/config/config.go",
+      "why": "secrets and credentials: the app tokens in the state directory, their format check and their 0600 mode"
+    },
+    {
+      "glob": "cmd/porterd/main.go",
+      "why": "secrets and credentials: porterd token set, the state directory's mode, and the wiring of the app socket and the private socket"
+    },
+    {
+      "glob": "cmd/porterd/main_test.go",
+      "why": "auth: the app contract's socket rules (kittest) that porterd must pass"
+    },
+    {
+      "glob": "{api/api.go,internal/rpcserver/server.go}",
+      "why": "auth: the caller kind of each connection (local, session, agent) and the private socket's callers"
+    },
+    {
+      "glob": "internal/tools/{classify,registry,tools}.go",
+      "why": "auth: what each tool may do (no send, frostread read-only), the unattended tools of routines, and the token per app"
+    },
+    {
+      "glob": "internal/agent/{agent,run}.go",
+      "why": "auth: the approval cards for changes, and the unattended routine run that gets only the unattended tools"
+    },
+    {
+      "glob": "internal/routine/parse.go",
+      "why": "auth: the routine output path check that keeps Porter out of Porter/Routines/ (ADR-0005)"
+    },
+    {
+      "glob": "internal/thread/store.go",
+      "why": "destructive operations: the thread database's schema, its column migration and its recovery"
+    }
+  ]
+}

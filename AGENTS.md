@@ -10,8 +10,8 @@ layer. Start at [docs/README.md](docs/README.md). The architecture is in
 [docs/design/overview.md](docs/design/overview.md).
 
 This file (`AGENTS.md`) is the CANONICAL agent instructions. `CLAUDE.md`,
-`GEMINI.md` and `.github/copilot-instructions.md` are symlinks to it, and
-`.claude/skills` symlinks to `.agents/skills/`
+`GEMINI.md`, `.cursorrules` and `.github/copilot-instructions.md` are
+symlinks to it, and `.claude/skills` symlinks to `.agents/skills/`
 ([ADR-0002](docs/adr/0002-agent-portable-instruction-surface.md)). Edit only
 the canonical paths, and keep content tool-agnostic.
 
@@ -61,10 +61,14 @@ repositories do, read their file.
   `internal/packagecheck` tests the staged tree and its units. `make deb`
   builds the release `.deb` with nFPM (`packaging/nfpm.yaml`, checked by
   `packaging/deb-check.py`); `make bump` tags a release.
+  `packaging/README.md` is the runbook: what installs where, update, roll
+  back and release.
 - `.github/workflows/`: `ci.yml`, the jobs of `make ci` plus `deb`, a
   snapshot `.deb`; and `release.yml`, where a tag builds, attests and
-  publishes the `.deb`. `internal/workflowcheck` tests that their actions are
-  SHA-pinned with least privilege (frostyard/core ADR-0021).
+  publishes the `.deb`; and `risk-paths.yml`, the caller that labels a
+  `risk:high` PR. `internal/workflowcheck` tests that their actions are
+  SHA-pinned with least privilege (frostyard/core ADR-0021), and it tests
+  the files of the repository baseline (below).
 
 ## Gates
 
@@ -128,6 +132,35 @@ repositories do, read their file.
 - API changes start in `schema/rpc`.
 - Never log a prompt, a tool result or a token. Log the app, the tool, the
   status and the duration.
+
+## Repository baseline
+
+The repository follows core's baseline (frostyard/core ADR-0071, its spec
+`docs/specs/repository-baseline.md`, rows B1 to B17;
+[org-adrs.md](docs/org-adrs.md)). `internal/workflowcheck` fails `make
+verify` when one of these files breaks:
+
+- The instruction symlinks above (B1). Edit `AGENTS.md`, never a link.
+- `.memory/corrections.jsonl` (B2): 1 JSON object per line with exactly
+  `date`, `scope`, `correction`, `evidence` and `promoted_to`. Append only:
+  never edit or remove a line (no test checks this). The file may be empty,
+  as it is now: Porter has no correction yet. A fix of a blocking review
+  point adds its guard and 1 line.
+- `.github/risk-paths.json` (B6, core ADR-0068): a PR that touches a listed
+  path gets `risk:high` from `.github/workflows/risk-paths.yml`. Its PR body
+  names each matched path and why the change is safe. A new release
+  workflow, packaging script, unit, credential store, auth check or socket
+  admission joins the list in the PR that adds it; a glob that matches no
+  file fails.
+- `.github/dependabot.yml` (B13): 1 entry for each manifest (`go.mod`,
+  `web/package.json`). A new manifest gets an entry.
+
+`.github/pull_request_template.md` (B7) holds the risk tier.
+Vulnerabilities are reported privately ([SECURITY.md](SECURITY.md), B14).
+The root `README.md` follows core's README spec for the kind `service`
+(B17, core ADR-0072): core's `frostyard-readme` skill checks it, in the nsl
+machine. No `CODEOWNERS` file (B15), and no other agent framework's tree
+(B16).
 
 ## Repository boundary
 

@@ -43,7 +43,7 @@ How the host differs from a Snosi image:
   `/usr/bin/porterd`, and the units and the sysusers.d entry in `/usr/lib/`.
   The package has no maintainer scripts, so an update runs
   `systemctl daemon-reload`, starts Porter and runs `lodgectl reload` by hand
-  (the README's Update).
+  (the [packaging runbook](../../packaging/README.md#update)).
 - Before v0.2.0, porterd was `/opt/lodge/bin/porterd`, with full units in
   `/etc/systemd/system/` that named it and the sysusers.d entry in
   `/etc/sysusers.d/`. The move removed them, so only one porterd can start.
