@@ -23,7 +23,7 @@ routines with Activity and Approvals, and reading from frostread. Phase 4,
 the GitHub manager, waits for that app. The done-when checks of Phases 2
 and 3 are still open. v0.2.0 (`99ab9a3`) is deployed on lodge's host
 (2026-11-03), from its release `.deb`; the roadmap's Deployments table
-records each deploy. porterd is on lodge's kit `v0.3.1`, and the web bundle on `@frostyard/lodge-client`
+records each deploy. porterd is on lodge's kit `v0.4.0`, and the web bundle on `@frostyard/lodge-client`
 `client/v0.3.2` and `@frostyard/lodge-ui` `ui/v0.6.0`. ADR-0007 is Accepted
 (Brian, 2026-10-21), and ADRs 0001 to 0006 are Accepted (Brian,
 2026-10-23); the design doc and the routines spec are Proposed.
@@ -95,7 +95,7 @@ repositories do, read their file.
 - Brian tags. Agents never tag, push tags or release. `make bump` is his
   command: on a clean, up to date `main` with a passing `make check`, it
   tags `svu next` and pushes the tag.
-- Internal dependencies: `github.com/frostyard/lodge/kit` `v0.3.1` in
+- Internal dependencies: `github.com/frostyard/lodge/kit` `v0.4.0` in
   `go.mod` (packages `inference`, `jsonrpc`, `lodgeapp`, `manifest`,
   `kittest`, `rpctest`); `@frostyard/lodge-client` `client/v0.3.2` and
   `@frostyard/lodge-ui` `ui/v0.6.0`, as `github:frostyard/lodge` tags in
