@@ -7,7 +7,7 @@ latest main. Reviews apply AGENTS.md and the docs' rules. -->
 
 ## Risk tier
 
-Declare the highest applicable tier, never lower. A `risk:high` label (a path in `.github/risk-paths.json`) means tier 3; name each matched path and say why the change is safe.
+Declare the highest applicable tier, never lower. A `risk:high` label (a path in `.github/risk-paths.json`) means tier 3; name each matched path and say why the change is safe. The label stands for level L1 or L2 of the PR's level labels (`level:L1` to `level:L4`, core ADR-0078).
 
 Scale: 1 low = docs, tests, comments; 2 medium = behaviour change in code; 3 high = security, data loss, releases or publishing, CI and permissions, or any `risk:high` label.
 
