@@ -8,6 +8,9 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -56,6 +59,12 @@ func code(err error) api.ErrorCode {
 
 func startWith(t *testing.T, m agent.Model) (*app, *kittest.Lodge) {
 	t.Helper()
+	a, l, _ := startWithStore(t, m)
+	return a, l
+}
+
+func startWithStore(t *testing.T, m agent.Model) (*app, *kittest.Lodge, *thread.Store) {
+	t.Helper()
 	store, err := thread.Open(t.Context(), filepath.Join(t.TempDir(), "thread.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -66,11 +75,11 @@ func startWith(t *testing.T, m agent.Model) (*app, *kittest.Lodge) {
 	ctx, cancel := context.WithCancel(context.Background())
 	svc := service.New(ctx, store, ag, nil)
 	t.Cleanup(func() { cancel(); svc.Wait() })
-	a, err := newApp(slog.New(slog.DiscardHandler), svc, service.NewActivity(store, nil, nil))
+	a, err := newApp(slog.New(slog.DiscardHandler), svc, service.NewActivity(store, nil, nil), store.PendingCount)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return a, kittest.Start(t, ID, a.lodge)
+	return a, kittest.Start(t, ID, a.lodge), store
 }
 
 func start(t *testing.T) (*app, *kittest.Lodge) {
@@ -78,6 +87,140 @@ func start(t *testing.T) (*app, *kittest.Lodge) {
 	open := make(chan struct{})
 	close(open)
 	return startWith(t, slowModel{reply: "Hello.", gate: open})
+}
+
+func TestHealthBadge(t *testing.T) {
+	_, l, store := startWithStore(t, nil)
+	check := func(want int) {
+		t.Helper()
+		h, err := l.Health(t.Context())
+		if err != nil || !h.OK || h.Badge != want {
+			t.Fatalf("health = %+v, %v; want OK, badge %d", h, err, want)
+		}
+	}
+	check(0)
+	status, body := l.Get(t, "/health", kittest.Session())
+	if status != 200 || strings.Contains(body, `"badge"`) {
+		t.Fatalf("empty health = %d %s; want no badge member", status, body)
+	}
+	tn, err := store.Add(t.Context(), api.Turn{Role: api.RolePorter, Done: true,
+		Cards: []api.Card{{Kind: api.CardApproval, Status: api.StatusPending}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(1)
+	tn.Cards[0].Status = api.StatusCancelled
+	if err := store.Update(t.Context(), tn); err != nil {
+		t.Fatal(err)
+	}
+	check(0)
+}
+
+func badgeLodge(t *testing.T, pending func(context.Context) (int, error)) *kittest.Lodge {
+	t.Helper()
+	store, err := thread.Open(t.Context(), filepath.Join(t.TempDir(), "thread.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	ctx, cancel := context.WithCancel(t.Context())
+	svc := service.New(ctx, store, &agent.Agent{Store: store}, nil)
+	t.Cleanup(func() { cancel(); svc.Wait() })
+	a, err := newApp(slog.New(slog.DiscardHandler), svc, service.NewActivity(store, nil, nil), pending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return kittest.Start(t, ID, a.lodge)
+}
+
+func TestHealthBadgeFailure(t *testing.T) {
+	l := badgeLodge(t, func(context.Context) (int, error) { return 0, errors.New("count failed") })
+	h, err := l.Health(t.Context())
+	if err != nil || !h.OK || h.Badge != 0 {
+		t.Fatalf("health = %+v, %v; want OK without badge", h, err)
+	}
+}
+
+func TestHealthBadgeNil(t *testing.T) {
+	l := badgeLodge(t, nil)
+	h, err := l.Health(t.Context())
+	if err != nil || !h.OK || h.Badge != 0 {
+		t.Fatalf("health = %+v, %v; want OK without badge", h, err)
+	}
+}
+
+func TestHealthBadgePanic(t *testing.T) {
+	var calls atomic.Int64
+	l := badgeLodge(t, func(context.Context) (int, error) {
+		if calls.Add(1) == 1 {
+			panic("private card text")
+		}
+		return 1, nil
+	})
+	h, err := l.Health(t.Context())
+	if err != nil || !h.OK || h.Badge != 0 {
+		t.Fatalf("panic health = %+v, %v; want OK without badge", h, err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	for {
+		h, err = l.Health(ctx)
+		if err != nil || !h.OK {
+			t.Fatalf("health after panic = %+v, %v", h, err)
+		}
+		if h.Badge == 1 {
+			break
+		}
+		if ctx.Err() != nil {
+			t.Fatal("count guard stayed busy after panic")
+		}
+	}
+}
+
+func TestHealthBadgeTimeout(t *testing.T) {
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }) })
+	returned := make(chan struct{})
+	var returnedOnce sync.Once
+	var calls atomic.Int64
+	l := badgeLodge(t, func(context.Context) (int, error) {
+		calls.Add(1)
+		<-release
+		returnedOnce.Do(func() { close(returned) })
+		return 7, nil
+	})
+	started := time.Now()
+	h, err := l.Health(t.Context())
+	if err != nil || !h.OK || h.Badge != 0 {
+		t.Fatalf("slow health = %+v, %v; want OK without badge", h, err)
+	}
+	if elapsed := time.Since(started); elapsed > 2*time.Second {
+		t.Fatalf("health took %v; want at most 2 s with scheduling margin", elapsed)
+	}
+	h, err = l.Health(t.Context())
+	if err != nil || !h.OK || h.Badge != 0 || calls.Load() != 1 {
+		t.Fatalf("busy health = %+v, %v; calls %d", h, err, calls.Load())
+	}
+	releaseOnce.Do(func() { close(release) })
+	<-returned
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	for {
+		h, err = l.Health(ctx)
+		if err != nil || !h.OK {
+			t.Fatalf("released health = %+v, %v", h, err)
+		}
+		if h.Badge == 7 {
+			break
+		}
+		if ctx.Err() != nil {
+			t.Fatal("no badge after release")
+		}
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("calls = %d; want 2", calls.Load())
+	}
 }
 
 // The manifest lodge installs is valid, and names this daemon.
