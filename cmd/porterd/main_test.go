@@ -116,7 +116,30 @@ func TestHealthBadge(t *testing.T) {
 	check(0)
 }
 
+// logBuffer keeps what a logger writes, safe for concurrent use.
+type logBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (b *logBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *logBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 func badgeLodge(t *testing.T, pending func(context.Context) (int, error)) *kittest.Lodge {
+	t.Helper()
+	return badgeLodgeLog(t, slog.New(slog.DiscardHandler), pending)
+}
+
+func badgeLodgeLog(t *testing.T, log *slog.Logger, pending func(context.Context) (int, error)) *kittest.Lodge {
 	t.Helper()
 	store, err := thread.Open(t.Context(), filepath.Join(t.TempDir(), "thread.db"))
 	if err != nil {
@@ -126,7 +149,7 @@ func badgeLodge(t *testing.T, pending func(context.Context) (int, error)) *kitte
 	ctx, cancel := context.WithCancel(t.Context())
 	svc := service.New(ctx, store, &agent.Agent{Store: store}, nil)
 	t.Cleanup(func() { cancel(); svc.Wait() })
-	a, err := newApp(slog.New(slog.DiscardHandler), svc, service.NewActivity(store, nil, nil), pending)
+	a, err := newApp(log, svc, service.NewActivity(store, nil, nil), pending)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,9 +172,12 @@ func TestHealthBadgeNil(t *testing.T) {
 	}
 }
 
+// A panicking count sends no badge, logs no panic value, and frees the
+// counter at once: the next poll counts.
 func TestHealthBadgePanic(t *testing.T) {
 	var calls atomic.Int64
-	l := badgeLodge(t, func(context.Context) (int, error) {
+	var logs logBuffer
+	l := badgeLodgeLog(t, slog.New(slog.NewTextHandler(&logs, nil)), func(context.Context) (int, error) {
 		if calls.Add(1) == 1 {
 			panic("private card text")
 		}
@@ -161,19 +187,12 @@ func TestHealthBadgePanic(t *testing.T) {
 	if err != nil || !h.OK || h.Badge != 0 {
 		t.Fatalf("panic health = %+v, %v; want OK without badge", h, err)
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
-	for {
-		h, err = l.Health(ctx)
-		if err != nil || !h.OK {
-			t.Fatalf("health after panic = %+v, %v", h, err)
-		}
-		if h.Badge == 1 {
-			break
-		}
-		if ctx.Err() != nil {
-			t.Fatal("count guard stayed busy after panic")
-		}
+	if h, err = l.Health(t.Context()); err != nil || !h.OK || h.Badge != 1 {
+		t.Fatalf("health after panic = %+v, %v; want OK, badge 1", h, err)
+	}
+	got := logs.String()
+	if !strings.Contains(got, "pending count panicked") || strings.Contains(got, "private card text") {
+		t.Fatalf("logs = %q; want the panic noted without its value", got)
 	}
 }
 
@@ -191,7 +210,9 @@ func TestHealthBadgeTimeout(t *testing.T) {
 		return 7, nil
 	})
 	started := time.Now()
-	h, err := l.Health(t.Context())
+	first, cancelFirst := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancelFirst()
+	h, err := l.Health(first)
 	if err != nil || !h.OK || h.Badge != 0 {
 		t.Fatalf("slow health = %+v, %v; want OK without badge", h, err)
 	}

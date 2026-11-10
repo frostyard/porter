@@ -92,13 +92,16 @@ A Go daemon on lodge's kit (`kit/lodgeapp`, `kit/jsonrpc`,
   turns with their cards (approvals included), the rolling summary, the
   full-text index, Activity, and each routine's state.
 - **The rail badge:** the `badge` in porterd's `/health` answer counts pending
-  capture and approval cards (`api.StatusPending`), the same cards as
-  `thread.pending`. It counts each card, not each turn, and is omitted at 0.
+  capture and approval cards (`api.StatusPending`), by the same filter as
+  `thread.pending`. It counts each card, not each turn, with no limit
+  (`thread.pending` lists at most 100 turns), and is omitted at 0.
   Porter has 1 owner, so the count does not differ by login
   ([lodge ADR-0020](https://github.com/frostyard/lodge/blob/main/docs/adr/0020-apps-report-an-unread-count-for-the-rail-in-their-health.md),
   [shell spec](https://github.com/frostyard/lodge/blob/main/docs/specs/shell.md#badges)).
   Each poll uses 1 count query, bounded at 1 s, with 1 count at a time.
   A failed or slow count sends no badge and never makes health degraded.
+  The query reads every turn; if the thread grows large enough to slow it,
+  an index or a stored counter of pending cards replaces it.
 - **The scheduler** (`internal/routine`): it loads routines from
   `Porter/Routines/` ([specs/routines.md](../specs/routines.md)) and runs
   each when it is due.

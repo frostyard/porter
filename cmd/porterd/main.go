@@ -249,18 +249,13 @@ func (b *badgeCounter) badge(ctx context.Context) int {
 	if !b.busy.CompareAndSwap(false, true) {
 		return 0
 	}
+	// The buffer lets a count that ends after the timeout go.
 	done := make(chan badgeResult, 1)
 	go func() {
-		defer b.busy.Store(false)
-		defer func() {
-			if recover() != nil {
-				// A panic value can contain card text. Do not log it.
-				b.log.Error("pending count panicked")
-				done <- badgeResult{err: errors.New("pending count panicked")}
-			}
-		}()
-		n, err := b.pending(ctx)
-		done <- badgeResult{n: n, err: err}
+		res := b.count(ctx)
+		// Free the counter before the answer, so the next poll can count.
+		b.busy.Store(false)
+		done <- res
 	}()
 	select {
 	case res := <-done:
@@ -273,4 +268,16 @@ func (b *badgeCounter) badge(ctx context.Context) int {
 		b.log.Warn("pending count timed out")
 		return 0
 	}
+}
+
+// count runs the count once. A panic becomes an error that carries no
+// panic value, since that value can contain card text.
+func (b *badgeCounter) count(ctx context.Context) (res badgeResult) {
+	defer func() {
+		if recover() != nil {
+			res = badgeResult{err: errors.New("pending count panicked")}
+		}
+	}()
+	n, err := b.pending(ctx)
+	return badgeResult{n: n, err: err}
 }
