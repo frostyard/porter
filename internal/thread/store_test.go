@@ -246,6 +246,57 @@ func TestOpenAddsLastSuccessToAnOldDatabase(t *testing.T) {
 	}
 }
 
+func TestPendingCount(t *testing.T) {
+	s := open(t)
+	ctx := t.Context()
+	check := func(want int) {
+		t.Helper()
+		n, err := s.PendingCount(ctx)
+		if err != nil || n != want {
+			t.Fatalf("pending count = %d, %v; want %d", n, err, want)
+		}
+		ts, err := s.Pending(ctx, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cards := 0
+		for _, tn := range ts {
+			for _, c := range tn.Cards {
+				if c.Status == api.StatusPending && (c.Kind == api.CardCapture || c.Kind == api.CardApproval) {
+					cards++
+				}
+			}
+		}
+		if n != cards {
+			t.Fatalf("count = %d, Pending has %d cards", n, cards)
+		}
+	}
+	check(0)
+	var turns []api.Turn
+	for _, cards := range [][]api.Card{
+		{{Kind: api.CardCapture, Status: api.StatusPending}},
+		{{Kind: api.CardApproval, Status: api.StatusPending}, {Kind: api.CardTool, Status: api.StatusDone}},
+		{{Kind: api.CardCapture, Status: api.StatusPending}, {Kind: api.CardApproval, Status: api.StatusPending}},
+		{{Kind: api.CardApproval, Status: api.StatusCancelled}},
+		{{Kind: api.CardCapture, Status: api.StatusDone}},
+		{{Kind: api.CardTool, Status: api.StatusPending}},
+	} {
+		tn, err := s.Add(ctx, api.Turn{Role: api.RolePorter, Cards: cards, Done: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		turns = append(turns, tn)
+	}
+	check(4)
+	for i, status := range []api.CardStatus{api.StatusDone, api.StatusCancelled} {
+		turns[i].Cards[0].Status = status
+		if err := s.Update(ctx, turns[i]); err != nil {
+			t.Fatal(err)
+		}
+		check(3 - i)
+	}
+}
+
 func TestPendingFindsCapturesAndApprovals(t *testing.T) {
 	s := open(t)
 	ctx := t.Context()

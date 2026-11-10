@@ -22,7 +22,9 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync/atomic"
 	"syscall"
+	"time"
 
 	"github.com/frostyard/lodge/kit/inference"
 	"github.com/frostyard/lodge/kit/jsonrpc"
@@ -158,7 +160,7 @@ func run(ctx context.Context, args []string) error {
 		log.Warn("no notes token: routines cannot run")
 	}
 
-	app, err := newApp(log, svc, service.NewActivity(store, routines, runRoutine))
+	app, err := newApp(log, svc, service.NewActivity(store, routines, runRoutine), store.PendingCount)
 	if err != nil {
 		return err
 	}
@@ -202,19 +204,80 @@ type app struct {
 
 // newApp builds the API and the server lodge reaches it through: GET
 // /health, and GET /api, a browser session's JSON-RPC.
-func newApp(log *slog.Logger, threads api.ThreadService, activity api.ActivityService) (*app, error) {
+func newApp(log *slog.Logger, threads api.ThreadService, activity api.ActivityService, pending func(context.Context) (int, error)) (*app, error) {
 	rpc := rpcserver.New(rpcserver.Options{Name: "porterd " + version, Logger: log})
 	router, err := api.NewRouter(api.Services{RPC: rpc, Thread: threads, Activity: activity})
 	if err != nil {
 		return nil, err
 	}
+	var badge *badgeCounter
+	if pending != nil {
+		badge = &badgeCounter{pending: pending, log: log}
+	}
 	return &app{rpc: rpc, router: router, lodge: &lodgeapp.Server{
-		Health: func(context.Context) lodgeapp.Health {
-			return lodgeapp.Health{OK: true, Version: version, Protocol: api.Protocol}
+		Health: func(ctx context.Context) lodgeapp.Health {
+			h := lodgeapp.Health{OK: true, Version: version, Protocol: api.Protocol}
+			if badge != nil {
+				h.Badge = badge.badge(ctx)
+			}
+			return h
 		},
 		API: func(ctx context.Context, nc net.Conn, _ lodgeapp.Caller) {
 			rpc.ServeConn(ctx, nc, router, api.CallerSession)
 		},
 		Logger: log,
 	}}, nil
+}
+
+// badgeCounter counts the pending cards for lodge's rail (lodge ADR-0020).
+// It runs 1 count at a time and bounds each health poll at 1 s, even when
+// the count does not respect its context. Nil pending in newApp sends no badge.
+type badgeCounter struct {
+	pending func(context.Context) (int, error)
+	log     *slog.Logger
+	busy    atomic.Bool
+}
+
+type badgeResult struct {
+	n   int
+	err error
+}
+
+func (b *badgeCounter) badge(ctx context.Context) int {
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	if !b.busy.CompareAndSwap(false, true) {
+		return 0
+	}
+	// The buffer lets a count that ends after the timeout go.
+	done := make(chan badgeResult, 1)
+	go func() {
+		res := b.count(ctx)
+		// Free the counter before the answer, so the next poll can count.
+		b.busy.Store(false)
+		done <- res
+	}()
+	select {
+	case res := <-done:
+		if res.err != nil {
+			b.log.Warn("pending count failed", "err", res.err)
+			return 0
+		}
+		return res.n
+	case <-ctx.Done():
+		b.log.Warn("pending count timed out")
+		return 0
+	}
+}
+
+// count runs the count once. A panic becomes an error that carries no
+// panic value, since that value can contain card text.
+func (b *badgeCounter) count(ctx context.Context) (res badgeResult) {
+	defer func() {
+		if recover() != nil {
+			res = badgeResult{err: errors.New("pending count panicked")}
+		}
+	}()
+	n, err := b.pending(ctx)
+	return badgeResult{n: n, err: err}
 }

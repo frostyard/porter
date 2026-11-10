@@ -273,6 +273,19 @@ func (s *Store) Pending(ctx context.Context, limit int) ([]api.Turn, error) {
 		ORDER BY id DESC LIMIT ?`, limit)
 }
 
+// PendingCount counts pending capture and approval cards, not turns.
+func (s *Store) PendingCount(ctx context.Context) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM turns t, json_each(t.cards) c
+		WHERE instr(t.cards, '"pending"') > 0
+			AND json_extract(c.value, '$.status') = 'pending'
+			AND json_extract(c.value, '$.kind') IN ('capture', 'approval')`).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("pending count: %w", err)
+	}
+	return n, nil
+}
+
 // AddEntry stores e as a new Activity entry, setting its id and time.
 func (s *Store) AddEntry(ctx context.Context, e api.Entry) (api.Entry, error) {
 	e.At = s.now().UTC().Format(time.RFC3339)
