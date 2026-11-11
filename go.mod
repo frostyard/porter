@@ -2,7 +2,7 @@ module github.com/frostyard/porter
 
 go 1.27.0
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	github.com/frostyard/lodge/kit v0.4.0
