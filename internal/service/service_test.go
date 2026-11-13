@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,12 +19,10 @@ import (
 
 // emitOnSubscribe answers thread.subscribe, and emits its Activity
 // entries after Subscribe returns and before the answer is on the wire:
-// the gap in which another request on the connection can broadcast. It
-// closes subscribed, when set, once they are emitted.
+// the gap in which another request on the connection can broadcast.
 type emitOnSubscribe struct {
-	svc        *Thread
-	emit       []api.Entry
-	subscribed chan struct{}
+	svc  *Thread
+	emit []api.Entry
 }
 
 func (d emitOnSubscribe) Dispatch(ctx context.Context, method string, _ jsontext.Value) (any, error) {
@@ -33,9 +32,6 @@ func (d emitOnSubscribe) Dispatch(ctx context.Context, method string, _ jsontext
 	busy, err := d.svc.Subscribe(ctx, &api.ThreadSubscribeParams{})
 	for _, e := range d.emit {
 		d.svc.EmitActivity(e)
-	}
-	if d.subscribed != nil {
-		close(d.subscribed)
 	}
 	return busy, err
 }
@@ -49,10 +45,18 @@ func entries(n int) []api.Entry {
 	return es
 }
 
-// failWrites is a connection whose writes fail while its reads go on.
-type failWrites struct{ net.Conn }
+// failWrites is a connection whose writes fail while its reads go on. It
+// closes failed after its first write fails.
+type failWrites struct {
+	net.Conn
+	once   *sync.Once
+	failed chan struct{}
+}
 
-func (failWrites) Write([]byte) (int, error) { return 0, errors.New("write refused") }
+func (f failWrites) Write([]byte) (int, error) {
+	f.once.Do(func() { close(f.failed) })
+	return 0, errors.New("write refused")
+}
 
 // serve runs the service on one connection, with d's svc set. The channel
 // closes when the connection has ended and its OnClose functions have run.
@@ -172,18 +176,19 @@ func TestSubscribeSendsPastAnUnsentEvent(t *testing.T) {
 // never goes live: its queue fills, the connection is closed, and it
 // leaves the subscribers.
 func TestSubscribeFailedAnswer(t *testing.T) {
-	subscribed := make(chan struct{})
-	svc, c, done := serve(t, emitOnSubscribe{subscribed: subscribed},
-		func(nc net.Conn) net.Conn { return failWrites{nc} })
+	failed := make(chan struct{})
+	svc, c, done := serve(t, emitOnSubscribe{},
+		func(nc net.Conn) net.Conn { return failWrites{nc, new(sync.Once), failed} })
 	answered := make(chan error, 1)
 	go func() {
 		_, err := c.Thread().Subscribe(t.Context(), &api.ThreadSubscribeParams{})
 		answered <- err
 	}()
+	// The answer is the first write on the connection.
 	select {
-	case <-subscribed:
+	case <-failed:
 	case <-time.After(10 * time.Second):
-		t.Fatal("no subscribe within 10 s")
+		t.Fatal("no answer written within 10 s")
 	}
 	for _, e := range entries(maxQueued + 1) {
 		svc.EmitActivity(e)
