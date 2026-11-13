@@ -629,3 +629,32 @@ func TestEachToolCallIsLoggedWithoutItsContent(t *testing.T) {
 		}
 	}
 }
+
+// A name the model made up can hold owner content, so a tool call logs the
+// app and the tool only when the registry offers the name (porter#40).
+func TestAToolNameTheRegistryDoesNotKnowIsNotLogged(t *testing.T) {
+	r := newRig(t,
+		callTool("notes__Secret_Plan_token_123", `{"path":"x"}`),
+		callTool("Secret_Name_456__read_note", `{}`),
+		callTool("notes__read_note_Secret_789", `not json`),
+		say("done"))
+	sink := &logSink{}
+	r.agent.Log = slog.New(sink)
+	r.ask(t, "read my plan", nil)
+	calls := sink.with("tool call")
+	if len(calls) != 3 {
+		t.Fatalf("logged %d tool calls, want 3", len(calls))
+	}
+	for _, l := range calls {
+		a := attrs(l)
+		if a["tool"].String() != unknownTool || a["app"].String() != "" || a["status"].String() != string(api.StatusFailed) {
+			t.Errorf("a name the registry does not know logged as %v", a)
+		}
+	}
+	logged := sink.all()
+	for _, secret := range []string{"Secret_Plan_token_123", "Secret_Name_456", "Secret_789"} {
+		if strings.Contains(logged, secret) {
+			t.Errorf("the log holds %q:\n%s", secret, logged)
+		}
+	}
+}

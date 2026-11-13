@@ -246,12 +246,24 @@ func (a *Agent) ForVault(text string) string { return links.ForVault(text, a.Lod
 // maxApprovalArgs bounds the arguments an approval card keeps whole.
 const maxApprovalArgs = 16 << 10
 
+// unknownTool stands in a tool call's log line for a name the registry does
+// not offer.
+const unknownTool = "(unknown)"
+
 // call runs one tool call, logs it, and returns what the model reads, and
 // the card.
 func (a *Agent) call(ctx context.Context, call ToolCall, seen idSet, unattended bool) (string, api.Card) {
 	start := time.Now()
 	out, card := a.runCall(ctx, call, seen, unattended)
-	a.logCall(ctx, card, start)
+	// The model writes the tool's name, and owner content can sit in a name
+	// it made up: log only a name the registry offers.
+	logged := card
+	if _, known := a.Registry.Lookup(ctx, call.Function.Name); known {
+		logged.App, logged.Tool, _ = strings.Cut(call.Function.Name, "__")
+	} else {
+		logged.App, logged.Tool = "", unknownTool
+	}
+	a.logCall(ctx, logged, start)
 	return out, card
 }
 
