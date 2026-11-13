@@ -115,8 +115,9 @@ export interface Routine {
   enabled: boolean;
   /** When it runs next, RFC 3339 in UTC. */
   next?: string;
-  /** When it last ran, RFC 3339 in UTC. */
+  /** The scheduled time of its last scheduled run, RFC 3339 in UTC; a run now does not move it. */
   last?: string;
+  /** Whether its last scheduled run succeeded; a run now does not move it. */
   lastOk?: boolean;
   /** Whether a run of it is active now, scheduled or run now. */
   running?: boolean;

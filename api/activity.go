@@ -77,9 +77,11 @@ type Routine struct {
 	Enabled bool `json:"enabled"`
 	// Next is when it runs next, RFC 3339 in UTC.
 	Next string `json:"next,omitzero"`
-	// Last is when it last ran, RFC 3339 in UTC.
+	// Last is the scheduled time of its last scheduled run, RFC 3339 in
+	// UTC; a run now does not move it.
 	Last string `json:"last,omitzero"`
-	// LastOK is whether its last run succeeded.
+	// LastOK is whether its last scheduled run succeeded; a run now does
+	// not move it.
 	LastOK *bool `json:"lastOk,omitzero"`
 	// Running says whether a run of it is active now, scheduled or run now.
 	Running bool `json:"running,omitzero"`

@@ -246,9 +246,43 @@ func (a *Agent) ForVault(text string) string { return links.ForVault(text, a.Lod
 // maxApprovalArgs bounds the arguments an approval card keeps whole.
 const maxApprovalArgs = 16 << 10
 
-// call runs one tool call and returns what the model reads, and the card.
-// Unattended, a tool that is not unattended becomes an approval card.
+// unknownTool stands in a tool call's log line for a name the registry does
+// not offer.
+const unknownTool = "(unknown)"
+
+// call runs one tool call, logs it, and returns what the model reads, and
+// the card.
 func (a *Agent) call(ctx context.Context, call ToolCall, seen idSet, unattended bool) (string, api.Card) {
+	start := time.Now()
+	out, card := a.runCall(ctx, call, seen, unattended)
+	// The model writes the tool's name, and owner content can sit in a name
+	// it made up: log only a name the registry offers.
+	logged := card
+	if _, known := a.Registry.Lookup(ctx, call.Function.Name); known {
+		logged.App, logged.Tool, _ = strings.Cut(call.Function.Name, "__")
+	} else {
+		logged.App, logged.Tool = "", unknownTool
+	}
+	a.logCall(ctx, logged, start)
+	return out, card
+}
+
+// logCall logs one tool call: its app, tool, kind, status and duration,
+// and never its arguments, its result or its text, which are the owner's
+// content (AGENTS.md).
+func (a *Agent) logCall(ctx context.Context, c api.Card, start time.Time) {
+	level := slog.LevelInfo
+	if c.Status == api.StatusFailed {
+		level = slog.LevelWarn
+	}
+	a.log().LogAttrs(ctx, level, "tool call",
+		slog.String("app", c.App), slog.String("tool", c.Tool), slog.String("kind", string(c.Kind)),
+		slog.String("status", string(c.Status)), slog.Duration("duration", time.Since(start)))
+}
+
+// runCall runs one tool call. Unattended, a tool that is not unattended
+// becomes an approval card.
+func (a *Agent) runCall(ctx context.Context, call ToolCall, seen idSet, unattended bool) (string, api.Card) {
 	card := api.Card{ID: a.cardID(), Kind: api.CardTool, Status: api.StatusDone, Tool: call.Function.Name}
 	var args map[string]any
 	if s := strings.TrimSpace(call.Function.Arguments); s != "" && s != "null" {
@@ -409,6 +443,24 @@ func outcome(c api.Card) string {
 			return "The append failed: " + c.Detail
 		}
 		return "Shown to the owner to confirm; nothing appended yet."
+	}
+	if c.Kind == api.CardApproval {
+		// The owner's card: say what it waits for, so a pending or
+		// dismissed approval never reads as done.
+		switch c.Status {
+		case api.StatusCancelled:
+			return "The owner dismissed the approval: " + c.Summary + ". Nothing was done."
+		case api.StatusFailed:
+			return "The owner approved it, but it failed: " + c.Detail
+		case api.StatusDone:
+			s := "The owner approved it, and it was done: " + c.Summary + "."
+			if c.URL != "" {
+				s += " Its url: " + c.URL
+			}
+			return s + " (The full result is not repeated here.)"
+		}
+		// Pending, or a status an approval does not take.
+		return "Proposed to the owner as an approval card: " + c.Summary + ". It waits for their approval; nothing is done yet."
 	}
 	if c.Status == api.StatusFailed {
 		return "Failed: " + c.Detail

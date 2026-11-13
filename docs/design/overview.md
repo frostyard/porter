@@ -62,8 +62,9 @@ A Go daemon on lodge's kit (`kit/lodgeapp`, `kit/jsonrpc`,
 - **The tool registry:**
   - One MCP client per app, through lodge's local agent socket, each with
     that app's token. The registry lists each app's tools, as the app offers
-    them under the token's scope, under the app's prefix (`notes.read_note`,
-    `mail.draft_reply`).
+    them under the token's scope, under the app's prefix: the app and the
+    tool joined by two underscores (`notes__read_note`,
+    `mail__draft_reply`).
   - Porter's own tools: `search_thread`, `now`, and `remember`. `remember`
     appends a line to `Porter/Memory.md` through notes, only when the owner
     asks, and never in a routine. In a routine, a call of a tool that is

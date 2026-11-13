@@ -117,6 +117,7 @@ func (a *Agent) Confirm(ctx context.Context, cardID, edited string) (api.Turn, e
 	if notes == nil {
 		return api.Turn{}, ErrUnavailable
 	}
+	start := time.Now()
 	res, err := notes.Call(ctx, "append_to_daily_note", map[string]any{"text": c.Text})
 	switch {
 	case err != nil:
@@ -126,6 +127,7 @@ func (a *Agent) Confirm(ctx context.Context, cardID, edited string) (api.Turn, e
 	default:
 		c.Status, c.URL = api.StatusDone, res.URL
 	}
+	a.logCall(ctx, *c, start)
 	a.save(ctx, t)
 	if c.Status != api.StatusDone {
 		return api.Turn{}, fmt.Errorf("%w: %s", ErrUnavailable, c.Detail)
@@ -159,6 +161,7 @@ func (a *Agent) approve(ctx context.Context, t api.Turn, i int, edited string) (
 		}
 		args["text"], c.Text = edited, edited
 	}
+	start := time.Now()
 	_, res, err := a.Registry.Call(ctx, tools.Name(c.App, c.Tool), args, false)
 	switch {
 	case err != nil:
@@ -168,6 +171,7 @@ func (a *Agent) approve(ctx context.Context, t api.Turn, i int, edited string) (
 	default:
 		c.Status, c.URL = api.StatusDone, res.URL
 	}
+	a.logCall(ctx, *c, start)
 	a.save(ctx, t)
 	if c.Status != api.StatusDone {
 		return api.Turn{}, fmt.Errorf("%w: %s", ErrUnavailable, c.Detail)

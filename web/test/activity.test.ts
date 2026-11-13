@@ -135,6 +135,8 @@ describe("Activity", () => {
     expect(b.querySelector(".routine-zone")?.textContent).toBe("Europe/Lisbon");
     expect(b.querySelector(".badge")?.textContent).toBe("On");
     expect(b.querySelector(".routine-next time")?.textContent).toBe(dateTime("2026-10-20T05:30:00Z"));
+    // The time is the last scheduled run's; a run now does not move it.
+    expect(b.querySelector(".routine-last .label")?.textContent).toBe("Last scheduled ");
     expect(b.querySelector(".routine-last time")?.textContent).toBe(dateTime("2026-10-19T05:30:00Z"));
     expect(b.querySelector(".routine-last .run-ok")?.textContent).toBe("ok");
 

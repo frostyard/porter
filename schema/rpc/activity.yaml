@@ -47,8 +47,8 @@ types:
       - {name: output, type: string, optional: true, doc: "Its output path template."}
       - {name: enabled, type: bool, doc: "Whether it runs; false keeps it without running it."}
       - {name: next, type: string, optional: true, doc: "When it runs next, RFC 3339 in UTC; absent when invalid or disabled."}
-      - {name: last, type: string, optional: true, doc: "When it last ran, RFC 3339 in UTC."}
-      - {name: lastOk, type: bool, optional: true, doc: "Whether its last run succeeded."}
+      - {name: last, type: string, optional: true, doc: "The scheduled time of its last scheduled run, RFC 3339 in UTC; a run now does not move it."}
+      - {name: lastOk, type: bool, optional: true, doc: "Whether its last scheduled run succeeded; a run now does not move it."}
       - {name: running, type: bool, optional: true, doc: "Whether a run of it is active now, scheduled or run now."}
 methods:
   - name: list
