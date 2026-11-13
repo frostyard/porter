@@ -200,3 +200,9 @@ and specs it shapes. A design doc links its ADRs, its specs and the roadmap
 phase that builds it. A spec links its ADRs and its design doc. A plan links
 what each phase implements. A new doc gets a line in
 [docs/README.md](docs/README.md). Convert relative dates to absolute dates.
+
+Evidence in a plan claims only what the source shows. Read each test body
+before you cite it, and say what it asserts, not what its name suggests.
+Read the code before you describe a rule, and name each exception it has.
+Name the gate that runs each test: `make check` for Go, `make web-check`
+for the web. A check by the owner stays open until it is recorded.
