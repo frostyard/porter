@@ -264,7 +264,7 @@ export class ActivityView {
     }
     if (r.last) {
       const last = el("span", "routine-last");
-      last.append(el("span", "label", "Last "), timeEl(r.last));
+      last.append(el("span", "label", "Last scheduled "), timeEl(r.last));
       if (r.lastOk !== undefined) {
         last.append(" ", el("span", r.lastOk ? "run-ok" : "run-failed", r.lastOk ? "ok" : "failed"));
       }

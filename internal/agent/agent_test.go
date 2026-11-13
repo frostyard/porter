@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -242,6 +244,8 @@ func TestCaptureWaitsForTheOwner(t *testing.T) {
 		say("I'll add that once you confirm."),
 		callTool("notes__append_to_daily_note", `{"text":"- buy milk"}`),
 		say("Waiting for you."))
+	sink := &logSink{}
+	r.agent.Log = slog.New(sink)
 	got := r.ask(t, "capture: call the plumber", nil)
 	if r.notes.appended.Load() != 0 {
 		t.Fatal("the capture was appended before the owner confirmed")
@@ -256,6 +260,14 @@ func TestCaptureWaitsForTheOwner(t *testing.T) {
 	}
 	if r.notes.appended.Load() != 1 || notice.Role != api.RoleNotice || !strings.Contains(notice.Text, "/notes/1/2026-10-20.md") {
 		t.Fatalf("after confirming: appended %d, notice %+v", r.notes.appended.Load(), notice)
+	}
+	// The append the owner confirmed is logged too.
+	if !slices.ContainsFunc(sink.with("tool call"), func(l slog.Record) bool {
+		a := attrs(l)
+		return a["tool"].String() == "append_to_daily_note" && a["app"].String() == "notes" &&
+			a["status"].String() == string(api.StatusDone)
+	}) {
+		t.Errorf("the confirmed append is not logged: %s", sink.all())
 	}
 	after, _ := r.store.Get(t.Context(), got.ID)
 	if after.Cards[0].Status != api.StatusDone || after.Cards[0].Text != "- call the plumber about the sink" {
@@ -466,5 +478,154 @@ func TestAChangeTakesOnlyIDsAToolReturned(t *testing.T) {
 	}
 	if got := r.ask(t, "now change thing 7", nil); r.notes.changed.Load() != 3 || got.Cards[0].Status != api.StatusDone {
 		t.Fatalf("an id the owner wrote: changed %d, cards %+v", r.notes.changed.Load(), got.Cards)
+	}
+}
+
+// outcome is what the history says a past card did, so an approval that is
+// still pending never reads as done (issue #35).
+func TestOutcomeOfAnApprovalFollowsItsStatus(t *testing.T) {
+	approval := func(status api.CardStatus) api.Card {
+		return api.Card{ID: "c1", Kind: api.CardApproval, App: "notes", Tool: "change_thing",
+			Summary: "change thing 16", Detail: "the app refused it", URL: "/notes/1/Things/16", Status: status}
+	}
+	for _, c := range []struct {
+		status api.CardStatus
+		want   []string
+	}{
+		{api.StatusPending, []string{"waits for their approval", "nothing is done yet"}},
+		{api.StatusCancelled, []string{"dismissed the approval", "Nothing was done"}},
+		{api.StatusFailed, []string{"approved it, but it failed", "the app refused it"}},
+		{api.StatusDone, []string{"approved it, and it was done", "change thing 16", "Its url: /notes/1/Things/16", "not repeated here"}},
+	} {
+		got := outcome(approval(c.status))
+		if strings.HasPrefix(got, "Done") {
+			t.Errorf("an approval with status %s read as done: %q", c.status, got)
+		}
+		for _, want := range c.want {
+			if !strings.Contains(got, want) {
+				t.Errorf("status %s: %q lacks %q", c.status, got, want)
+			}
+		}
+	}
+}
+
+// A routine's pending approval reaches the model through the history as
+// waiting, not as done (issue #35).
+func TestTheSearchedHistorySaysAnApprovalWaits(t *testing.T) {
+	r := newRig(t,
+		callTool("porter__search_thread", `{"query":"Morning brief"}`),
+		say("ok"))
+	if _, err := r.store.Add(t.Context(), api.Turn{Role: api.RoleNotice, Text: "Morning brief ran.", Done: true,
+		Cards: []api.Card{
+			{ID: "c1", Kind: api.CardApproval, App: "notes", Tool: "change_thing", Summary: "change thing 16", Status: api.StatusPending},
+			{ID: "c2", Kind: api.CardApproval, App: "notes", Tool: "change_thing", Summary: "change thing 16", Status: api.StatusCancelled},
+		}}); err != nil {
+		t.Fatal(err)
+	}
+	r.ask(t, "did the morning brief change anything?", nil)
+	last := r.model.requests[len(r.model.requests)-1].Messages
+	res := last[len(last)-1]
+	if res.Role != "tool" || res.Content == nil {
+		t.Fatalf("search_thread's result = %+v", res)
+	}
+	got := *res.Content
+	if strings.Contains(got, "Done: change thing 16") {
+		t.Errorf("a waiting approval reached the model as done: %s", got)
+	}
+	for _, want := range []string{"waits for their approval", "Nothing was done"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the searched history lacks %q: %s", want, got)
+		}
+	}
+}
+
+// logSink keeps every record a test's logger handles.
+type logSink struct {
+	mu      sync.Mutex
+	records []slog.Record
+}
+
+func (h *logSink) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h *logSink) Handle(_ context.Context, r slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.records = append(h.records, r.Clone())
+	return nil
+}
+
+func (h *logSink) WithAttrs([]slog.Attr) slog.Handler { return h }
+
+func (h *logSink) WithGroup(string) slog.Handler { return h }
+
+// with returns the records whose message is msg.
+func (h *logSink) with(msg string) []slog.Record {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var out []slog.Record
+	for _, r := range h.records {
+		if r.Message == msg {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// all renders every record, its message and every attribute key and value,
+// to look for content that must never be logged.
+func (h *logSink) all() string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var b strings.Builder
+	for _, r := range h.records {
+		b.WriteString(r.Message)
+		r.Attrs(func(a slog.Attr) bool {
+			fmt.Fprintf(&b, " %s=%s", a.Key, a.Value.String())
+			return true
+		})
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// attrs is a record's attributes by key.
+func attrs(r slog.Record) map[string]slog.Value {
+	m := map[string]slog.Value{}
+	r.Attrs(func(a slog.Attr) bool {
+		m[a.Key] = a.Value
+		return true
+	})
+	return m
+}
+
+// Each tool call is logged with its app, tool, status and duration, and
+// never its arguments, its result or its text (AGENTS.md).
+func TestEachToolCallIsLoggedWithoutItsContent(t *testing.T) {
+	r := newRig(t,
+		callTool("notes__read_note", `{"path":"Secret-Plan.md"}`),
+		callTool("notes__create_note", `{"path":"Porter/Routines/Planted.md","content":"top secret words"}`),
+		say("done"))
+	sink := &logSink{}
+	r.agent.Log = slog.New(sink)
+	r.ask(t, "read my plan, then make a routine", nil)
+	calls := sink.with("tool call")
+	if len(calls) != 2 {
+		t.Fatalf("logged %d tool calls, want 2", len(calls))
+	}
+	first := attrs(calls[0])
+	if first["app"].String() != "notes" || first["tool"].String() != "read_note" ||
+		first["status"].String() != string(api.StatusDone) || first["duration"].Kind() != slog.KindDuration {
+		t.Errorf("the first tool call = %v", first)
+	}
+	second := attrs(calls[1])
+	if second["app"].String() != "notes" || second["tool"].String() != "create_note" ||
+		second["status"].String() != string(api.StatusFailed) || calls[1].Level != slog.LevelWarn {
+		t.Errorf("the second tool call = %v, level %s", second, calls[1].Level)
+	}
+	logged := sink.all()
+	for _, secret := range []string{"Secret-Plan", "top secret words", "evil@example.com", "outside this token's writes"} {
+		if strings.Contains(logged, secret) {
+			t.Errorf("the log holds %q:\n%s", secret, logged)
+		}
 	}
 }
