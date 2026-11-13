@@ -62,18 +62,21 @@ func (s *subscriber) deliver(e jsonrpc.EventEnvelope) error {
 	return s.conn.Notify(api.EventMethod, e)
 }
 
-// start sends the queued events, and the later ones as they come.
+// start sends the queued events, and the later ones as they come. Like
+// broadcast, it tries each event: one that is not sent, such as one over
+// the kit's message limit, does not stop the ones after it.
 func (s *subscriber) start() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	q := s.queue
 	s.queue, s.live = nil, true
+	var errs []error
 	for _, e := range q {
 		if err := s.conn.Notify(api.EventMethod, e); err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 var _ api.ThreadService = (*Thread)(nil)
@@ -270,7 +273,9 @@ func (s *Thread) Subscribe(ctx context.Context, _ *api.ThreadSubscribeParams) (b
 	s.subs[c] = sub
 	s.mu.Unlock()
 	// Outside the lock: on a closed connection, OnClose runs fn at once.
-	// A failed answer means a broken connection, which this removes.
+	// After a failed answer, AfterReply never runs and the connection may
+	// stay open: the subscriber queues until maxQueued, which closes the
+	// connection, and this removes it.
 	c.OnClose(func() {
 		s.mu.Lock()
 		delete(s.subs, c)
