@@ -1,0 +1,7 @@
+{
+  "date": "2026-11-06",
+  "scope": "readme-claims",
+  "correction": "a README, SECURITY.md or design line about what Porter may do must keep ADR-0004's 2 modes apart: in chat Porter may flag and move mail and create or complete tasks when asked; only a routine turns an action outside the unattended tools into an approval card",
+  "evidence": "porter#28, cross-review (openai/gpt-6.1-sol) of head 7374d10, finding 2: README.md said any other change becomes an approval card",
+  "promoted_to": "AGENTS.md (Repository baseline)"
+}

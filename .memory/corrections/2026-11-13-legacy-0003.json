@@ -1,0 +1,7 @@
+{
+  "date": "2026-11-13",
+  "scope": "logging",
+  "correction": "a tool call's log line takes the app and the tool only from a name the registry offers: the model writes the function name and can put owner content in a made-up one, so an unknown name logs as (unknown)",
+  "evidence": "porter#40, cross-review (openai/gpt-6.1-sol) of head de8a438, finding 1: logCall logged the raw function name of an unknown tool and of a call whose arguments were not JSON",
+  "promoted_to": "internal/agent/agent_test.go (TestAToolNameTheRegistryDoesNotKnowIsNotLogged)"
+}
