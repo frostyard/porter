@@ -1,0 +1,7 @@
+{
+  "date": "2026-11-13",
+  "scope": "plan-evidence",
+  "correction": "evidence in a plan claims only what the source shows: read each cited test body and the code first, name every exception of a rule, and name the gate that runs each test (make check for Go, make web-check for the web)",
+  "evidence": "porter#45, cross-review (openai/gpt-6.1-sol) of head b15e2a8, findings 1 to 4: make check named for web tests, the id rule without its other sources, a parse test called a write test, and every routine call called an approval card",
+  "promoted_to": "AGENTS.md (Documentation rules)"
+}
