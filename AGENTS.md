@@ -20,10 +20,10 @@ the canonical paths, and keep content tool-agnostic.
 Pre-release, public on GitHub. Phases 0, 1, 2, 3 and 5 of the
 [roadmap](docs/plans/0001-roadmap.md) are built: chat in the companion,
 routines with Activity and Approvals, and reading from frostread. Phase 4,
-the GitHub manager, waits for that app. The done-when checks of Phases 2
-and 3 are still open. v0.2.0 (`99ab9a3`) is deployed on lodge's host
-(2026-11-03), from its release `.deb`; the roadmap's Deployments table
-records each deploy. porterd is on lodge's kit `v0.4.0`, and the web bundle on `@frostyard/lodge-client`
+the GitHub manager, is parked until that app exists. Phases 2 and 3 are
+done (2026-11-13), closed on the code, test and host evidence. v0.2.0
+(`99ab9a3`) is deployed on lodge's host (2026-11-03), from its release
+`.deb`; the roadmap's Deployments table records each deploy. porterd is on lodge's kit `v0.4.0`, and the web bundle on `@frostyard/lodge-client`
 `client/v0.3.2` and `@frostyard/lodge-ui` `ui/v0.6.0`. ADR-0007 is Accepted
 (Brian, 2026-10-21), and ADRs 0001 to 0006 are Accepted (Brian,
 2026-10-23); the design doc and the routines spec are Proposed.
@@ -205,4 +205,6 @@ Evidence in a plan claims only what the source shows. Read each test body
 before you cite it, and say what it asserts, not what its name suggests.
 Read the code before you describe a rule, and name each exception it has.
 Name the gate that runs each test: `make check` for Go, `make web-check`
-for the web. A check by the owner stays open until it is recorded.
+for the web. A check by the owner stays open until it is recorded, or
+until the owner closes the phase without it; then the plan names each
+check that was not recorded.

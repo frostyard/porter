@@ -13,10 +13,11 @@ Status (2026-11-13):
   Proposed.
 - Phase 1 is built and checked on lodge's host (2026-10-19).
 - Phases 2 and 3 are built and merged to `main` (porter#1 and porter#2,
-  2026-10-21), and deployed. Their evidence from the code, the tests and
-  the host is recorded in each phase (2026-11-13). The owner's checks
-  through lodge are still open: Phase 2's four on the phone and the
-  desktop, and Phase 3's week of briefs and its Sunday review.
+  2026-10-21), and deployed. They are done (2026-11-13), closed on the
+  code, test and host evidence recorded in each phase. The owner closed
+  them without the checks through lodge that were not recorded: Phase 2's
+  four on the phone and the desktop, and Phase 3's week of briefs and its
+  Sunday review.
 - Phase 4 is parked (2026-11-13): the GitHub manager app does not exist.
 - Phase 5 (reading from frostread) is built before Phase 4, merged
   (porter#7) and deployed (2026-10-21,
@@ -98,7 +99,7 @@ How the host differs from a Snosi image:
   - The same mail token over the tailnet route answered 401, and a user
     not in `lodge-agents` could not open the socket.
 
-## Phase 2 — Chat in the companion (interactive only)
+## Phase 2 — Chat in the companion (interactive only; done 2026-11-13)
 
 - porterd's agent loop, tool registry, policy, thread store, rolling
   summary and `search_thread`
@@ -136,10 +137,12 @@ The thread over lodge's session: `TestAThreadOverTheSession`
 and `TestSummaryAndRecovery`
 ([store_test.go](../../internal/thread/store_test.go)).
 
-**Open:** the four checks on the owner's phone and desktop, through lodge.
-The code and the tests above stand behind each; none is recorded live.
+**Done (2026-11-13), closed on the code, test and host evidence.** The
+code and the tests above stand behind each done-when line. The four
+checks on the owner's phone and desktop, through lodge, were not
+recorded live; the owner closed the phase without them.
 
-## Phase 3 — Routines, Activity and Approvals
+## Phase 3 — Routines, Activity and Approvals (done 2026-11-13)
 
 **Built 2026-10-20** on porter branch `phase3/routines`:
 - the scheduler (`internal/routine`);
@@ -147,7 +150,7 @@ The code and the tests above stand behind each; none is recorded live.
 - `thread.pending` and the `activity` domain;
 - the full app's Activity and Approvals tabs.
 
-What remains is the done-when evidence: a week of briefs, and a review.
+The phase closed on its done-when evidence (2026-11-13), recorded below.
 
 - The scheduler, invalid-routine reporting, missed runs, limits and output
   notes ([specs/routines.md](../specs/routines.md)).
@@ -180,9 +183,11 @@ runs both on every pull request.
 Activity over lodge's session: `TestActivityOverTheSession`
 ([main_test.go](../../cmd/porterd/main_test.go)).
 
-**Open:** a week of weekday briefs in `Porter/Briefs/`, a Sunday review in
-`Porter/Reviews/`, and the review of them; an edited routine and a
-flag-mail routine on lodge's host.
+**Done (2026-11-13), closed on the code, test and host evidence.** These
+were not recorded, and the owner closed the phase without them: a week of
+weekday briefs in `Porter/Briefs/`, a Sunday review in `Porter/Reviews/`,
+and the review of them; an edited routine and a flag-mail routine on
+lodge's host.
 
 ## Phase 4 — The GitHub manager (parked 2026-11-13)
 
