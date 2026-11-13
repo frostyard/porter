@@ -1,0 +1,7 @@
+{
+  "date": "2026-11-13",
+  "scope": "service",
+  "correction": "thread.subscribe queues a connection's events until its answer is on the wire. The flush must try every queued event: an event that the kit does not send (over its message limit) must not stop the events after it, as broadcast already does. A failed answer never starts the subscriber; the queue bound closes the connection and removes it.",
+  "evidence": "frostyard/porter#48, cross-review (openai/gpt-6.1-sol) of head ca3ef5c, findings 1 and 2",
+  "promoted_to": "internal/service/service_test.go"
+}

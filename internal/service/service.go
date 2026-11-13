@@ -28,8 +28,55 @@ type Thread struct {
 
 	mu   sync.Mutex
 	busy bool
-	subs map[*jsonrpc.Conn]struct{}
+	subs map[*jsonrpc.Conn]*subscriber
 	wg   sync.WaitGroup
+}
+
+// maxQueued is the number of events a subscriber queues before its answer
+// is on the wire. A connection that passes it is closed.
+const maxQueued = 256
+
+// subscriber is one subscribed connection. Its events queue from the
+// moment thread.subscribe reads busy until the answer is on the wire, so
+// none is lost in between; then they go out in order.
+type subscriber struct {
+	conn *jsonrpc.Conn
+
+	mu    sync.Mutex // held while an event is written, to keep the order
+	live  bool
+	queue []jsonrpc.EventEnvelope
+}
+
+// deliver sends e, or queues it until the answer is on the wire.
+func (s *subscriber) deliver(e jsonrpc.EventEnvelope) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.live {
+		if len(s.queue) >= maxQueued {
+			_ = s.conn.Close()
+			return errors.New("too many events before the subscribe answer")
+		}
+		s.queue = append(s.queue, e)
+		return nil
+	}
+	return s.conn.Notify(api.EventMethod, e)
+}
+
+// start sends the queued events, and the later ones as they come. Like
+// broadcast, it tries each event: one that is not sent, such as one over
+// the kit's message limit, does not stop the ones after it.
+func (s *subscriber) start() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	q := s.queue
+	s.queue, s.live = nil, true
+	var errs []error
+	for _, e := range q {
+		if err := s.conn.Notify(api.EventMethod, e); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 var _ api.ThreadService = (*Thread)(nil)
@@ -40,7 +87,7 @@ func New(ctx context.Context, store *thread.Store, a *agent.Agent, log *slog.Log
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	s := &Thread{store: store, agent: a, log: log, base: ctx, subs: map[*jsonrpc.Conn]struct{}{}}
+	s := &Thread{store: store, agent: a, log: log, base: ctx, subs: map[*jsonrpc.Conn]*subscriber{}}
 	a.Emit = s.emitTurn
 	return s
 }
@@ -62,13 +109,13 @@ func (s *Thread) broadcast(name string, data any) {
 	}
 	e := jsonrpc.EventEnvelope{Event: name, Data: raw}
 	s.mu.Lock()
-	conns := make([]*jsonrpc.Conn, 0, len(s.subs))
-	for c := range s.subs {
-		conns = append(conns, c)
+	subs := make([]*subscriber, 0, len(s.subs))
+	for _, sub := range s.subs {
+		subs = append(subs, sub)
 	}
 	s.mu.Unlock()
-	for _, c := range conns {
-		if err := c.Notify(api.EventMethod, e); err != nil {
+	for _, sub := range subs {
+		if err := sub.deliver(e); err != nil {
 			s.log.Debug("event not delivered", "err", err)
 		}
 	}
@@ -207,24 +254,37 @@ func (s *Thread) Pending(ctx context.Context, _ *api.ThreadPendingParams) (*api.
 // EmitActivity sends an Activity entry to every subscribed connection.
 func (s *Thread) EmitActivity(e api.Entry) { s.broadcast("activity", e) }
 
-// Subscribe implements thread.subscribe: events reach this connection
-// once the answer has.
+// Subscribe implements thread.subscribe: every event from the moment it
+// reads busy reaches this connection, after the answer. The connection
+// joins the subscribers under the same lock as the read, so a change of
+// busy after the answer comes as an event.
 func (s *Thread) Subscribe(ctx context.Context, _ *api.ThreadSubscribeParams) (bool, error) {
 	c := jsonrpc.ConnFrom(ctx)
 	if c == nil {
 		return false, api.Errorf(api.CodeInvalidRequest, "events need a connection")
 	}
-	jsonrpc.AfterReply(ctx, func() {
-		s.mu.Lock()
-		s.subs[c] = struct{}{}
-		s.mu.Unlock()
-		c.OnClose(func() {
-			s.mu.Lock()
-			delete(s.subs, c)
-			s.mu.Unlock()
-		})
-	})
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.busy, nil
+	busy := s.busy
+	if _, ok := s.subs[c]; ok {
+		s.mu.Unlock()
+		return busy, nil // subscribed already: events flow
+	}
+	sub := &subscriber{conn: c}
+	s.subs[c] = sub
+	s.mu.Unlock()
+	// Outside the lock: on a closed connection, OnClose runs fn at once.
+	// After a failed answer, AfterReply never runs and the connection may
+	// stay open: the subscriber queues until maxQueued, which closes the
+	// connection, and this removes it.
+	c.OnClose(func() {
+		s.mu.Lock()
+		delete(s.subs, c)
+		s.mu.Unlock()
+	})
+	jsonrpc.AfterReply(ctx, func() {
+		if err := sub.start(); err != nil {
+			s.log.Debug("event not delivered", "err", err)
+		}
+	})
+	return busy, nil
 }
