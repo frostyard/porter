@@ -11,7 +11,8 @@ it runs scheduled prompts for you. It runs on lodge's host as lodge's
 
 **Status:** pre-release. Chat, routines and reading from frostread run on lodge's host.
 
-**Documentation:** [docs/README.md](docs/README.md)
+**Documentation:** [the Porter guide on frostyard.org](https://frostyard.org/docs/apps/porter/)
+for users, and [docs/README.md](docs/README.md) for maintainers.
 
 ## What it does
 
