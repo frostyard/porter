@@ -1,6 +1,6 @@
 # 0007 — Porter reads frostread, read-only
 
-- **Status:** Accepted (Brian, 2026-10-21)
+- **Status:** Superseded by [0008](0008-porter-no-longer-reads-frostread.md)
 - **Date:** 2026-10-21
 
 ## Context

@@ -57,10 +57,6 @@ Write my morning brief for today. Keep it to one phone screen, in this order:
 3. **Due:** tasks due today or overdue, and unchecked items in the last
    three days' daily notes.
 4. **Yesterday:** two or three lines on what I wrote and what I sent.
-5. **Reading:** new articles in my feeds since your last run, grouped by
-   source: at most 3 per source and 10 in all, newest first, each one line
-   with a link and a short summary. Then one line with how many more wait
-   unread. Skip the section when nothing is new.
 
 Draft no replies. End with one line offering to draft replies to the
 "Waiting on me" threads.
@@ -166,5 +162,5 @@ without waiting for its next time.
 
 ## References
 
-- Rationale: [ADR-0005](../adr/0005-memory-and-routines-live-in-the-vault.md), [ADR-0004](../adr/0004-porter-drafts-and-the-owner-sends.md), [ADR-0007](../adr/0007-porter-reads-frostread-read-only.md) (the brief's Reading section)
+- Rationale: [ADR-0005](../adr/0005-memory-and-routines-live-in-the-vault.md), [ADR-0004](../adr/0004-porter-drafts-and-the-owner-sends.md), [ADR-0008](../adr/0008-porter-no-longer-reads-frostread.md) (a routine gets no reading tools since 2026-11-15)
 - Context: [design/overview.md](../design/overview.md)

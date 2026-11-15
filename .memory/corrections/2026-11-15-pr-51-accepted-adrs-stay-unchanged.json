@@ -1,0 +1,7 @@
+{
+  "date": "2026-11-15",
+  "scope": "docs/adr",
+  "correction": "When a new ADR supersedes an Accepted one, only the old ADR's Status line changes. Other Accepted ADRs, their References included, stay unchanged: the new ADR carries the links to them.",
+  "evidence": "frostyard/porter#51, cross-review (openai/gpt-6.1-sol) of head b6bfeac, finding 1 (ADR-0003's References were edited)",
+  "promoted_to": "AGENTS.md"
+}

@@ -1,16 +1,15 @@
 # Plan: Roadmap
 
 What Porter delivers, in order: what it needs from lodge and the apps, then
-chat in the companion, then routines, then reading from frostread, then the
-GitHub manager. It is
+chat in the companion, then routines, then the GitHub manager. It is
 lodge's roadmap Phase 5 (the assistant) carried into a build, and it waits
 on that phase's lodge work.
 
-Status (2026-11-13):
+Status (2026-11-15):
 - Phase 0 is done.
-- ADRs 0001 to 0007 are Accepted (0001 to 0006 by Brian, 2026-10-23).
-  The design doc and [specs/routines.md](../specs/routines.md) are
-  Proposed.
+- ADRs 0001 to 0006 and 0008 are Accepted (by Brian, 2026-10-23 and 2026-11-14).
+  ADR-0007 is superseded by ADR-0008. The design doc and
+  [specs/routines.md](../specs/routines.md) are Proposed.
 - Phase 1 is built and checked on lodge's host (2026-10-19).
 - Phases 2 and 3 are built and merged to `main` (porter#1 and porter#2,
   2026-10-21), and deployed. They are done (2026-11-13), closed on the
@@ -19,15 +18,16 @@ Status (2026-11-13):
   four on the phone and the desktop, and Phase 3's week of briefs and its
   Sunday review.
 - Phase 4 is parked (2026-11-13): the GitHub manager app does not exist.
-- Phase 5 (reading from frostread) is built before Phase 4, merged
-  (porter#7) and deployed (2026-10-21,
-  [ADR-0007](../adr/0007-porter-reads-frostread-read-only.md), Accepted).
-  Its done-when is met: a brief run by hand lists frostread items, and
-  chat answers "what is new in my feeds" from Read (OWNER-REPORTED,
-  Brian, 2026-10-21).
-- v0.2.0 (`99ab9a3`) is deployed on lodge's host (2026-11-03), from its
-  release `.deb`. See [Deployments](#deployments). It carries every merge
-  through porter#25 (Run now).
+- Phase 5 is retired on 2026-11-15 with frostread
+  ([ADR-0008](../adr/0008-porter-no-longer-reads-frostread.md)). A general
+  feed reader covers its use, and Porter's code no longer names the app
+  `read`. It was built before Phase 4, merged (porter#7) and deployed
+  (2026-10-21, [ADR-0007](../adr/0007-porter-reads-frostread-read-only.md),
+  Accepted). Its done-when was met: a brief run by hand lists frostread
+  items, and chat answers "what is new in my feeds" from Read
+  (OWNER-REPORTED, Brian, 2026-10-21).
+- v0.3.0 (`1f7185f`) is deployed on lodge's host (2026-11-15), from its
+  release `.deb`. See [Deployments](#deployments).
 
 ## Deployments
 
@@ -39,6 +39,7 @@ Porter runs on lodge's host, an Incus VM, as lodge's `porter` app.
 | 2026-10-21 | `73eead0` | `main` after porter#5: the service-bell icon (frostmail ADR-0015's frame), the look from `@frostyard/lodge-ui` `ui/v0.1.0`, times in the owner's zone, links into the vault, the `routine_alias` default | `lodgectl status` and `lodgectl apps` show porter `73eead0` up; the journal since the restart has no warning or error; the icon shows in the rail and on the companion button; 1 chat turn; a link in a brief opens the note, and a `/mail/message/…` link in a brief opens the message |
 | 2026-10-21 | `d3db41b` | `main` after porter#7: Porter reads frostread, read-only (ADR-0007); a routine knows its last success. `read` added to `/etc/porter/porter.json`; token `porter-read` (scope `read`, agent `frostporter`). Rollback archive `/root/porter-rollback-73eead0-20261021T155413Z.tar.gz` | `lodgectl apps` shows porter `d3db41b` up, with 3 apps; no warning in the journal since the restart; a temporary routine with the Morning brief's body and no `output` ran by hand (15:57 UTC, 0 actions), and its Reading section listed The Go Blog's new item with a `/read/item/<id>` link and the unread count; the temporary routine was then deleted |
 | 2026-11-03 | v0.2.0 (`99ab9a3`) | The release `.deb`, `dpkg -i` (Brian, T757a): Run now from the Routines list (porter#25), lodge kit v0.3.1. The host moved to the package's layout: `/usr/bin/porterd` and the package's units; the `/etc/systemd/system/` units, the `/etc/sysusers.d/` entry, `/opt/lodge/bin/porterd` and `porterd.prev` were archived and removed (README, Update). The package's sha256 `7068232f…c23fd6` and its attestation (`release.yml@refs/tags/v0.2.0`) were checked first. Rollback archive `/root/porter-rollback-d3db41b-20261103T152041Z.tar.gz` | `/health` on the app socket answers `0.2.0`, protocol 1; the service is `/usr/lib/systemd/system/frostporter.service`, `ExecStart=/usr/bin/porterd`; no warning in the journal since the start; 2 routines read, both valid, and 3 apps; over `/api` as a session, `activity.routines` and `activity.list` answer, and `activity.run` with an unknown name answers `notFound` (d3db41b answered "method does not exist"); no real run was started; the bundle carries Run now. lodge was not reloaded, so `lodgectl apps` still shows `72f0ebd` until `lodgectl reload` |
+| 2026-11-15 | v0.3.0 (`1f7185f`) | The release `.deb`, `dpkg -i`: the `/health` badge counts pending cards (porter#33), and Go 1.27.4. `read` removed from `/etc/porter/porter.json` (frostread retired). The package's sha256 `6a45d541…a11cd` and its attestation (`release.yml@refs/tags/v0.3.0`) were checked first. Rollback archive `/root/porter-rollback-0.2.0-20261115T030244Z.tar.gz` | `lodgectl apps` shows porter `0.3.0` up; `/health` on the app socket answers `0.3.0`, protocol 1; the journal since the start shows 1 routine read, valid, and `apps=2`, with no warning or error; notes MCP calls from `frostporter` answer 200 |
 
 How the host differs from a Snosi image:
 - It has no sysext and no apt source for porterd. Since v0.2.0
@@ -193,7 +194,7 @@ lodge's host.
 
 **Parked:** the GitHub manager app does not exist. No frostyard repository
 holds it, and Porter has no GitHub token or tool: its default apps are
-`notes`, `mail` and `read`
+`notes` and `mail`
 ([config.go](../../internal/config/config.go)). This phase resumes when
 that app exists as a lodge app with an MCP endpoint and a scope that
 drafts but does not post.
@@ -204,10 +205,13 @@ drafts but does not post.
 - **Done when:** "what's waiting on me on GitHub?" answers from the
   manager, and a drafted review waits there for the owner to post.
 
-## Phase 5 — Reading from frostread
+## Phase 5 — Reading from frostread (retired 2026-11-15)
 
-Built before Phase 4, since frostread exists and the GitHub manager does
-not ([ADR-0007](../adr/0007-porter-reads-frostread-read-only.md)).
+Retired on 2026-11-15 with frostread, which a general feed reader replaces
+([ADR-0008](../adr/0008-porter-no-longer-reads-frostread.md)); the record
+below stays as history. Built before Phase 4, since frostread existed and
+the GitHub manager does not
+([ADR-0007](../adr/0007-porter-reads-frostread-read-only.md)).
 
 - **The token:** one `read`-scope token, issued with
   `lodgectl token issue porter-read --app read --scope read --agent
@@ -250,5 +254,5 @@ not ([ADR-0007](../adr/0007-porter-reads-frostread-read-only.md)).
 ## References
 
 - Implements: [design/overview.md](../design/overview.md), [specs/routines.md](../specs/routines.md)
-- Decisions: [ADR-0003](../adr/0003-porter-is-a-lodge-app-that-owns-no-data.md), [ADR-0004](../adr/0004-porter-drafts-and-the-owner-sends.md), [ADR-0005](../adr/0005-memory-and-routines-live-in-the-vault.md), [ADR-0006](../adr/0006-one-continuous-thread.md), [ADR-0007](../adr/0007-porter-reads-frostread-read-only.md)
+- Decisions: [ADR-0003](../adr/0003-porter-is-a-lodge-app-that-owns-no-data.md), [ADR-0004](../adr/0004-porter-drafts-and-the-owner-sends.md), [ADR-0005](../adr/0005-memory-and-routines-live-in-the-vault.md), [ADR-0006](../adr/0006-one-continuous-thread.md), [ADR-0008](../adr/0008-porter-no-longer-reads-frostread.md) (ADR-0007 is superseded by it)
 - Related: lodge's [roadmap](https://github.com/frostyard/lodge/blob/main/docs/plans/0001-roadmap.md), Phase 5

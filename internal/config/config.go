@@ -29,7 +29,7 @@ type Config struct {
 	// RoutineAlias is the alias routines use by default; "local" when empty.
 	RoutineAlias string `json:"routine_alias"`
 	// Apps are the lodge apps Porter reaches, each with a token in the state
-	// directory; notes, mail and read when empty.
+	// directory; notes and mail when empty.
 	Apps []string `json:"apps"`
 	// LodgeURL is lodge's address, such as https://lodge.example.ts.net:
 	// links Porter writes into notes point there. Without it, links to
@@ -64,7 +64,7 @@ func Load(path string) (Config, error) {
 		c.RoutineAlias = "local"
 	}
 	if len(c.Apps) == 0 {
-		c.Apps = []string{"notes", "mail", "read"}
+		c.Apps = []string{"notes", "mail"}
 	}
 	for _, a := range c.Apps {
 		if !appID.MatchString(a) {
