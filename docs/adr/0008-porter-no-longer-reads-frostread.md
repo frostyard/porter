@@ -10,8 +10,8 @@
 host is stopped, its package is removed, and lodge no longer lists the app
 `read`. Its MCP endpoint `/mcp/read`, its 4 read tools and its
 `/read/item/<id>` address are gone with it
-([ADR-0007](0007-porter-reads-frostread-read-only.md), which ADR-0003
-extended).
+([ADR-0007](0007-porter-reads-frostread-read-only.md), which extended
+ADR-0003).
 
 Porter kept that app in 4 places: the default `apps` list of
 `/etc/porter/porter.json`, the `read` entry of the tool registry's `known`,

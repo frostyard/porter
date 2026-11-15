@@ -198,6 +198,9 @@ Docs live in `docs/` in four categories (frostyard/core ADR-0025).
 - `docs/adr/`: why we decided. Immutable once Accepted. A reversal is a new
   ADR that marks the old one Superseded. A Proposed ADR may be edited in
   place.
+  When an ADR supersedes another, only the old ADR's Status line
+  changes (`Superseded by [NNNN](…)`). Every other Accepted ADR stays as
+  it is, its References too: the new ADR carries the links.
 - `docs/design/`: how it fits together. Living, and updated to match
   reality.
 - `docs/specs/`: exact contracts. They change only alongside implementing
