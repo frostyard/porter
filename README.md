@@ -9,16 +9,16 @@ shell. You talk to it in a chat panel beside whatever app you are in, and
 it runs scheduled prompts for you. It runs on lodge's host as lodge's
 `porter` app.
 
-**Status:** pre-release. Chat, routines and reading from frostread run on lodge's host.
+**Status:** pre-release. Chat and routines run on lodge's host.
 
 **Documentation:** [the Porter guide on frostyard.org](https://frostyard.org/docs/apps/porter/)
 for users, and [docs/README.md](docs/README.md) for maintainers.
 
 ## What it does
 
-- **It reads across your apps.** Mail, calendar, tasks, notes and
-  frostread, only through each app's MCP endpoint, with a lodge token per
-  app. It owns none of your data
+- **It reads across your apps.** Mail, calendar, tasks and notes, only
+  through each app's MCP endpoint, with a lodge token per app. It owns none
+  of your data
   ([ADR-0003](docs/adr/0003-porter-is-a-lodge-app-that-owns-no-data.md)).
 - **It drafts, and you send.** No token carries a send or post right. In
   chat it can also flag and move mail, and create or complete tasks, when
@@ -32,8 +32,6 @@ for users, and [docs/README.md](docs/README.md) for maintainers.
   each routine is a scheduled prompt kept as a note in `Porter/Routines/`;
   Activity shows each run ([routines spec](docs/specs/routines.md),
   [ADR-0005](docs/adr/0005-memory-and-routines-live-in-the-vault.md)).
-- **It reads frostread, read-only**
-  ([ADR-0007](docs/adr/0007-porter-reads-frostread-read-only.md)).
 - **It thinks through lodge's inference layer,** so it holds no model
   credential ([overview](docs/design/overview.md)).
 

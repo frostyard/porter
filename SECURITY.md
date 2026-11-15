@@ -5,10 +5,11 @@ web bundle, which lodge serves. It holds an MCP token per app in
 `/var/lib/frostporter/tokens/` (mode 0600), and it reaches the apps only
 through lodge's agent socket. No token carries a send or post right: Porter
 drafts, and the owner sends
-([ADR-0004](docs/adr/0004-porter-drafts-and-the-owner-sends.md)). It reads
-frostread read-only
-([ADR-0007](docs/adr/0007-porter-reads-frostread-read-only.md)), and it
-passes other people's words to the model as data, never as instructions.
+([ADR-0004](docs/adr/0004-porter-drafts-and-the-owner-sends.md)). It reaches
+mail, calendar, tasks and notes. It passes other people's words to the
+model as data, never as instructions. It read frostread, read-only, until
+that app was retired on 2026-11-15
+([ADR-0008](docs/adr/0008-porter-no-longer-reads-frostread.md)).
 Treat any report that touches the tokens, the tool classification (what a
 tool may do), the routines' unattended tools, the approval cards, prompt
 injection through tool results, or the sockets with care.

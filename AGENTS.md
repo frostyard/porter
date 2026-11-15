@@ -17,16 +17,19 @@ the canonical paths, and keep content tool-agnostic.
 
 ## Status
 
-Pre-release, public on GitHub. Phases 0, 1, 2, 3 and 5 of the
+Pre-release, public on GitHub. Phases 0, 1, 2 and 3 of the
 [roadmap](docs/plans/0001-roadmap.md) are built: chat in the companion,
-routines with Activity and Approvals, and reading from frostread. Phase 4,
+and routines with Activity and Approvals. Phase 5, reading from
+frostread, is retired with that app on 2026-11-15
+([ADR-0008](docs/adr/0008-porter-no-longer-reads-frostread.md)). Phase 4,
 the GitHub manager, is parked until that app exists. Phases 2 and 3 are
-done (2026-11-13), closed on the code, test and host evidence. v0.2.0
-(`99ab9a3`) is deployed on lodge's host (2026-11-03), from its release
+done (2026-11-13), closed on the code, test and host evidence. v0.3.0
+(`1f7185f`) is deployed on lodge's host (2026-11-15), from its release
 `.deb`; the roadmap's Deployments table records each deploy. porterd is on lodge's kit `v0.4.0`, and the web bundle on `@frostyard/lodge-client`
-`client/v0.3.2` and `@frostyard/lodge-ui` `ui/v0.6.0`. ADR-0007 is Accepted
-(Brian, 2026-10-21), and ADRs 0001 to 0006 are Accepted (Brian,
-2026-10-23); the design doc and the routines spec are Proposed.
+`client/v0.3.2` and `@frostyard/lodge-ui` `ui/v0.6.0`. ADRs 0001 to
+0006 and 0008 are Accepted (Brian, 2026-10-23 and 2026-11-14). ADR-0007 is
+superseded by ADR-0008. The design doc and the routines spec are
+Proposed.
 Phase 1 was lodge's and the apps' work, in
 [frostyard/lodge](https://github.com/frostyard/lodge),
 [frostyard/frostnotes](https://github.com/frostyard/frostnotes) and
@@ -106,11 +109,12 @@ repositories do, read their file.
 
 ## Invariants (decided; binding from the first line of code)
 
-- **Porter owns no data.** It reaches mail, calendar, tasks, notes and reading (read-only,
-  [ADR-0007](docs/adr/0007-porter-reads-frostread-read-only.md)) only
+- **Porter owns no data.** It reaches mail, calendar, tasks and notes only
   through each app's `/mcp/<id>` with that app's token, over lodge's agent
   socket. It never reads another app's files or database
   ([ADR-0003](docs/adr/0003-porter-is-a-lodge-app-that-owns-no-data.md)).
+  It reached frostread read-only until 2026-11-15, when that app was
+  retired ([ADR-0008](docs/adr/0008-porter-no-longer-reads-frostread.md)).
 - **Porter drafts, and the owner sends.** No token carries a send or post
   right. Routines get only the unattended tools: reads, drafts, and notes
   in `Porter/` outside `Porter/Routines/`

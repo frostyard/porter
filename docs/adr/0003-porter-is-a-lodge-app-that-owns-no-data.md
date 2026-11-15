@@ -78,5 +78,5 @@ assistant will use it too.
 ## References
 
 - Shapes: [design/overview.md](../design/overview.md), [plans/0001-roadmap.md](../plans/0001-roadmap.md)
-- Extended by: [ADR-0007](0007-porter-reads-frostread-read-only.md) (frostread, the third app, read-only)
+- Extended by: [ADR-0007](0007-porter-reads-frostread-read-only.md) (frostread, the third app, read-only), which [ADR-0008](0008-porter-no-longer-reads-frostread.md) superseded on 2026-11-15
 - Builds on: frostyard/core [ADR-0057](https://github.com/frostyard/core/blob/main/docs/adr/0057-run-first-party-apps-behind-lodge.md), lodge [ADR-0006](https://github.com/frostyard/lodge/blob/main/docs/adr/0006-agents-reach-each-app-through-its-own-mcp-endpoint.md), [ADR-0011](https://github.com/frostyard/lodge/blob/main/docs/adr/0011-a-shared-inference-layer-routes-apps-to-models.md), [ADR-0013](https://github.com/frostyard/lodge/blob/main/docs/adr/0013-the-companion-opens-beside-the-current-app.md), [ADR-0014](https://github.com/frostyard/lodge/blob/main/docs/adr/0014-agents-on-lodges-host-use-a-local-agent-socket.md)

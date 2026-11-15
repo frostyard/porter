@@ -8,22 +8,23 @@ sends),
 [ADR-0005](../adr/0005-memory-and-routines-live-in-the-vault.md) (memory and
 routines in the vault),
 [ADR-0006](../adr/0006-one-continuous-thread.md) (one thread),
-[ADR-0007](../adr/0007-porter-reads-frostread-read-only.md) (reading from
-frostread, read-only).
+[ADR-0008](../adr/0008-porter-no-longer-reads-frostread.md) (no app
+`read`).
 Contracts: [specs/routines.md](../specs/routines.md), and lodge's
 [app contract](https://github.com/frostyard/lodge/blob/main/docs/specs/app-contract.md), and
 [lodge ADR-0020](https://github.com/frostyard/lodge/blob/main/docs/adr/0020-apps-report-an-unread-count-for-the-rail-in-their-health.md) (rail badges).
 
-**Status: Phases 2, 3 and 5 built, merged to `main` and deployed on
-lodge's host** (v0.2.0, 2026-11-03; the record is in the
+**Status: Phases 2 and 3 built, merged to `main` and deployed on
+lodge's host** (v0.3.0, 2026-11-15; the record is in the
 [roadmap's Deployments](../plans/0001-roadmap.md#deployments)). Built:
 - porterd: the thread store, the tool registry over lodge's agent socket,
   the agent loop and the thread API;
 - the companion chat UI;
 - routines, Activity and Approvals (the
-  [roadmap](../plans/0001-roadmap.md), Phase 3);
-- reading from frostread, read-only (Phase 5,
-  [ADR-0007](../adr/0007-porter-reads-frostread-read-only.md)).
+  [roadmap](../plans/0001-roadmap.md), Phase 3).
+
+Reading from frostread (Phase 5) was removed on 2026-11-15, when that app
+was retired ([ADR-0008](../adr/0008-porter-no-longer-reads-frostread.md)).
 
 ## Overview
 
@@ -42,8 +43,8 @@ MCP endpoints, and it thinks through lodge's inference layer.
             ▼                      ▼                         ▼
   /run/lodge/agent.sock   /run/lodge/inference.sock   /var/lib/frostporter
   /mcp/notes, /mcp/mail,   aliases local, smart        thread, summary,
-  /mcp/read, later the                                  activity, approvals
-  GitHub manager
+  later the GitHub                                     activity, approvals
+  manager
 ```
 
 ## Design
@@ -74,15 +75,11 @@ A Go daemon on lodge's kit (`kit/lodgeapp`, `kit/jsonrpc`,
   - Tools are marked Read, Draft, Write, Change, Capture or Never.
     - A tool whose name says it sends, posts, forwards or invites is
       Never, and is never offered.
-    - `read` is read-only by an allow-list of Porter's own
-      ([ADR-0007](../adr/0007-porter-reads-frostread-read-only.md)): its 4
-      read tools (`list_sources`, `list_unread`, `search`, `read_item`) are
-      Read, and any other tool of that app is Never, whatever its
-      annotations or the token's scope. So `save_url`, `mark_read` and
-      `star` are never offered.
-    - The card of frostread's `read_item` links the lodge address
-      `/read/item/<id>`, from the result's `id`, not the article's web
-      address in its `url`. Its other tools give no link.
+    - An app Porter's `known` does not name is judged only by its
+      annotations: read-only is Read, anything else is Change. No app is
+      read-only by a list of Porter's own since 2026-11-15
+      ([ADR-0008](../adr/0008-porter-no-longer-reads-frostread.md)).
+    - A card links the result's top-level `url`, for every app.
     - notes' `append_to_daily_note` is Capture: porterd never runs it from
       the model, but shows a card the owner confirms.
 - **The policy:** chat gets every registered tool, and routines get only the
@@ -181,18 +178,15 @@ than trusting it:
 Placeholders in {braces} are filled on every request.
 
 > You are Porter, {owner}'s assistant inside lodge. You work alongside their
-> mail, calendar, tasks, notes and reading (their feeds and saved
-> articles, in Read).
+> mail, calendar, tasks and notes.
 >
 > **How you work**
 > - Be brief and plain. Lead with the answer. Add detail only when it helps.
 >   No greetings, filler, exclamation marks or emoji.
-> - Look things up before you answer. If the notes, mail, calendar, tasks or
->   reading can say, use the tools rather than memory.
+> - Look things up before you answer. If the notes, mail, calendar or tasks
+>   can say, use the tools rather than memory.
 > - Say where things came from. Link each source by the url its tool
 >   returned, as a markdown link, exactly as given.
-> - Link an article from Read by its address in lodge, `/read/item/<id>`,
->   with the id its tool returned, not by its web address.
 > - Never invent. If the sources don't say, say so, or ask. In a draft,
 >   never fill a gap with a guess (a time, someone's plans, a commitment).
 >   Leave a bracketed placeholder, such as `[time?]`.
@@ -280,7 +274,6 @@ that call's own `RPCError`, so Porter reads the code it keeps.
 | --- | --- | --- |
 | notes | `vault=<id>;write=Porter/;except=Porter/Routines/;daily` | reading the vault, memory, briefs and reviews, routines (read-only), capture |
 | mail | `account=*;write` (never `;send`) | mail, drafts, flags and moves; calendar, tasks and contacts ([frostmail plan 0012](https://github.com/frostyard/frostmail/blob/main/docs/plans/0012-calendar-tasks-and-contacts-for-agents.md); no event writes, [ADR-0042](https://github.com/frostyard/frostmail/blob/main/docs/adr/0042-agents-get-calendar-task-and-contact-tools.md)) |
-| read | `read` (never `write`) | chat about the owner's reading, and the brief's Reading section ([ADR-0007](../adr/0007-porter-reads-frostread-read-only.md)); read-only, by Porter's own allow-list too |
 | the GitHub manager | read, plus drafts; no posting | later |
 
 ## Operational notes
@@ -291,10 +284,8 @@ that call's own `RPCError`, so Porter reads the code it keeps.
   `/var/lib/frostporter/tokens/<app>` (0600). It is set with
   `porterd token set <app>` from stdin, never on the command line, and
   issued with `lodgectl token issue … --agent frostporter`, so it works only
-  on the agent socket. The `read` token is issued with
-  `lodgectl token issue porter-read --app read --scope read --agent frostporter`
-  and set with `porterd token set read`, from stdin. An app without a token
-  only warns in the log, and is left out of the registry.
+  on the agent socket. An app without a token only warns in the log, and
+  is left out of the registry.
 - **Dependencies:**
   - lodge's agent socket and inference socket must be up. Without
     inference, chat says the model is unavailable, and routines retry
@@ -321,9 +312,7 @@ What Porter does not do:
   ([ADR-0005](../adr/0005-memory-and-routines-live-in-the-vault.md)).
 - Routines get only the unattended tools: reads, drafts, and notes in
   `Porter/` outside `Porter/Routines/`. Other actions become approval cards.
-- It reads frostread read-only
-  ([ADR-0007](../adr/0007-porter-reads-frostread-read-only.md)). It writes
-  no calendar events.
+- It writes no calendar events.
 - It owns none of your data. It reaches the apps only through their MCP
   endpoints, with lodge tokens
   ([ADR-0003](../adr/0003-porter-is-a-lodge-app-that-owns-no-data.md)). It
@@ -350,4 +339,4 @@ What can go wrong:
 
 - Rationale: [ADR-0003](../adr/0003-porter-is-a-lodge-app-that-owns-no-data.md), [ADR-0004](../adr/0004-porter-drafts-and-the-owner-sends.md), [ADR-0005](../adr/0005-memory-and-routines-live-in-the-vault.md), [ADR-0006](../adr/0006-one-continuous-thread.md)
 - Contracts: [specs/routines.md](../specs/routines.md); lodge's [app contract](https://github.com/frostyard/lodge/blob/main/docs/specs/app-contract.md)
-- Built in: [roadmap, Phases 2, 3 and 5](../plans/0001-roadmap.md)
+- Built in: [roadmap, Phases 2 and 3](../plans/0001-roadmap.md)

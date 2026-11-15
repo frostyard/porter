@@ -28,7 +28,8 @@ Org-wide decisions that bind this repository are in
 - [0004: Porter drafts, and the owner sends](adr/0004-porter-drafts-and-the-owner-sends.md)
 - [0005: Memory and routines live in the vault](adr/0005-memory-and-routines-live-in-the-vault.md)
 - [0006: One continuous thread](adr/0006-one-continuous-thread.md)
-- [0007: Porter reads frostread, read-only](adr/0007-porter-reads-frostread-read-only.md)
+- [0007: Porter reads frostread, read-only](adr/0007-porter-reads-frostread-read-only.md) (superseded by 0008)
+- [0008: Porter no longer reads frostread](adr/0008-porter-no-longer-reads-frostread.md)
 
 ### Design
 
@@ -40,7 +41,7 @@ Org-wide decisions that bind this repository are in
 
 ### Plans
 
-- [0001: Roadmap](plans/0001-roadmap.md): what lodge and the apps provide, chat in the companion, routines, reading from frostread, the GitHub manager
+- [0001: Roadmap](plans/0001-roadmap.md): what lodge and the apps provide, chat in the companion, routines, reading from frostread (retired 2026-11-15), the GitHub manager
 
 ## Conventions
 

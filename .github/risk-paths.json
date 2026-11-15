@@ -70,7 +70,7 @@
     {
       "glob": "internal/tools/{classify,registry,tools}.go",
       "level": "L1",
-      "why": "auth: what each tool may do (no send, frostread read-only), the unattended tools of routines, and the token per app"
+      "why": "auth: what each tool may do (no send), the unattended tools of routines, and the token per app"
     },
     {
       "glob": "internal/agent/{agent,run,own}.go",
