@@ -25,7 +25,7 @@ frostread, is retired with that app on 2026-11-15
 the GitHub manager, is parked until that app exists. Phases 2 and 3 are
 done (2026-11-13), closed on the code, test and host evidence. v0.3.0
 (`1f7185f`) is deployed on lodge's host (2026-11-15), from its release
-`.deb`; the roadmap's Deployments table records each deploy. porterd is on lodge's kit `v0.4.0`, and the web bundle on `@frostyard/lodge-client`
+`.deb`; the roadmap's Deployments table records each deploy. porterd is on lodge's kit `v0.5.0`, and the web bundle on `@frostyard/lodge-client`
 `client/v0.3.2` and `@frostyard/lodge-ui` `ui/v0.6.0`. ADRs 0001 to
 0006 and 0008 are Accepted (Brian, 2026-10-23 and 2026-11-14). ADR-0007 is
 superseded by ADR-0008. The design doc and the routines spec are
@@ -98,7 +98,7 @@ repositories do, read their file.
 - Brian tags. Agents never tag, push tags or release. `make bump` is his
   command: on a clean, up to date `main` with a passing `make check`, it
   tags `svu next` and pushes the tag.
-- Internal dependencies: `github.com/frostyard/lodge/kit` `v0.4.0` in
+- Internal dependencies: `github.com/frostyard/lodge/kit` `v0.5.0` in
   `go.mod` (packages `inference`, `jsonrpc`, `lodgeapp`, `manifest`,
   `kittest`, `rpctest`); `@frostyard/lodge-client` `client/v0.3.2` and
   `@frostyard/lodge-ui` `ui/v0.6.0`, as `github:frostyard/lodge` tags in
