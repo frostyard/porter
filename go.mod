@@ -8,7 +8,7 @@ require (
 	github.com/frostyard/lodge/kit v0.6.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	go.yaml.in/yaml/v3 v3.0.6
-	modernc.org/sqlite v1.62.0
+	modernc.org/sqlite v1.63.0
 )
 
 require (
