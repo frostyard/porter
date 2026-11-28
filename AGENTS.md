@@ -167,8 +167,12 @@ verify` when one of these files breaks:
   matches no file fails. `TestRiskMarkers` also fails when a Go file with a
   method's callers, the unattended tool set, a file mode, the private socket
   or the schema matches no glob at `L1` or `L2`.
-- `.github/dependabot.yml` (B13): 1 entry for each manifest (`go.mod`,
-  `web/package.json`). A new manifest gets an entry.
+- `.github/dependabot.yml` (B13, core ADR-0089): exactly 1 entry for each
+  ecosystem: `github-actions` at `/`, `gomod` at `/`, and `npm` at `/web`.
+  Each schedule has only `interval: monthly`. A new manifest joins its
+  ecosystem's entry in `directories`. A new ecosystem gets an entry.
+  Each entry has 1 group with `patterns: ["*"]`, no `group-by`, and no
+  `applies-to`.
 
 `.github/pull_request_template.md` (B7) holds the risk tier.
 Vulnerabilities are reported privately ([SECURITY.md](SECURITY.md), B14).
